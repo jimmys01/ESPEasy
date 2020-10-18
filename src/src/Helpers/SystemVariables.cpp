@@ -1,14 +1,21 @@
 #include "SystemVariables.h"
 
-#include "../DataStructs/TimingStats.h"
-#include "../Globals/CRCValues.h"
-#include "StringConverter.h"
+#include "../../ESPEasy_common.h"
 #include "../../ESPEasy-Globals.h"
-#include "CompiletimeDefines.h"
 
+#include "../DataStructs/TimingStats.h"
+
+#include "../Globals/CRCValues.h"
 #ifdef USES_MQTT
 # include "../Globals/MQTT.h"
 #endif // ifdef USES_MQTT
+#include "../Globals/NetworkState.h"
+
+#include "../Helpers/Hardware.h"
+
+#include "CompiletimeDefines.h"
+#include "StringConverter.h"
+
 
 
 String getReplacementString(const String& format, String& s) {
@@ -92,7 +99,7 @@ void SystemVariables::parseSystemVariables(String& s, boolean useURLencode)
 
 
       case ISNTP:             value = String(statusNTPInitialized); break;
-      case ISWIFI:            value = String(wifiStatus); break; // 0=disconnected, 1=connected, 2=got ip, 3=services initialized
+      case ISWIFI:            value = String(wifiStatus); break; // 0=disconnected, 1=connected, 2=got ip, 4=services initialized
       // TODO: PKR: Add ETH Objects
       #ifdef HAS_ETHERNET
       
@@ -107,11 +114,7 @@ void SystemVariables::parseSystemVariables(String& s, boolean useURLencode)
       case LCLTIME_AM:        value = node_time.getDateTimeString_ampm('-', ':', ' '); break;
       case LF:                value = "\n"; break;
       case MAC:               value = getValue(LabelType::STA_MAC); break;
-    #ifdef ESP8266
-      case MAC_INT:           value = String(ESP.getChipId()); break; // Last 24 bit of MAC address as integer, to be used in rules.
-    #else // ifdef ESP8266
-      case MAC_INT:           value = ""; break;                      // FIXME TD-er: Must find proper altrnative for ESP32.
-    #endif // ifdef ESP8266
+      case MAC_INT:           value = String(getChipId()); break; // Last 24 bit of MAC address as integer, to be used in rules.
       case RSSI:              value = getValue(LabelType::WIFI_RSSI); break;
       case SPACE:             value = " "; break;
       case SSID:              value = (wifiStatus == ESPEASY_WIFI_DISCONNECTED) ? F("--") : WiFi.SSID(); break;

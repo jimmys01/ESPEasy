@@ -22,7 +22,7 @@ else:
   env.Append(CPPDEFINES=[
     "CONTROLLER_SET_ALL",
     "NOTIFIER_SET_NONE",
-    "PLUGIN_SET_ONLY_SWITCH",
+#    "PLUGIN_BUILD_NORMAL",
     "USES_P001",  # Switch
     "USES_P002",  # ADC
     "USES_P004",  # Dallas DS18b20
@@ -36,16 +36,19 @@ else:
     "USES_P059",  # Encoder
     "USES_P081",  # Cron
     "USES_P082",  # GPS
-#   "USES_P085",  # AcuDC24x
+    "USES_P085",  # AcuDC24x
+    "USES_P100",  # Pulse Counter - DS2423
 #   "USES_P087",  # Serial Proxy
 #   "USES_P094",  # CUL Reader
 #   "USES_P095",  # TFT ILI9341
 
     "USES_C016",  # Cache Controller
     "USES_C018",  # TTN/RN2483
+#    "USES_C015",  # TTN/RN2483
 
     "FEATURE_MDNS",
     "FEATURE_SD",
+    "FEATURE_I2CMULTIPLEXER",
 
     "USE_SETTINGS_ARCHIVE"
   ])

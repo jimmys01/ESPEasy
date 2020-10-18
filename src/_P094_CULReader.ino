@@ -10,6 +10,7 @@
 
 #include "_Plugin_Helper.h"
 
+#include "src/Helpers/StringConverter.h"
 #include "src/PluginStructs/P094_data_struct.h"
 
 #include <Regexp.h>
@@ -56,7 +57,7 @@ boolean Plugin_094(byte function, struct EventStruct *event, String& string) {
     case PLUGIN_DEVICE_ADD: {
       Device[++deviceCount].Number           = PLUGIN_ID_094;
       Device[deviceCount].Type               = DEVICE_TYPE_SERIAL;
-      Device[deviceCount].VType              = SENSOR_TYPE_STRING;
+      Device[deviceCount].VType              = Sensor_VType::SENSOR_TYPE_STRING;
       Device[deviceCount].Ports              = 0;
       Device[deviceCount].PullUpOption       = false;
       Device[deviceCount].InverseLogicOption = false;
@@ -127,11 +128,15 @@ boolean Plugin_094(byte function, struct EventStruct *event, String& string) {
       break;
     }
 
-    case PLUGIN_WEBFORM_LOAD: {
-      serialHelper_webformLoad(event);
+    case PLUGIN_WEBFORM_SHOW_SERIAL_PARAMS:
+    {
       addFormNumericBox(F("Baudrate"), P094_BAUDRATE_LABEL, P094_BAUDRATE, 2400, 115200);
       addUnit(F("baud"));
+      break;
+    }
 
+    case PLUGIN_WEBFORM_LOAD: 
+    {
       addFormSubHeader(F("Filtering"));
       P094_html_show_matchForms(event);
 
@@ -143,7 +148,6 @@ boolean Plugin_094(byte function, struct EventStruct *event, String& string) {
     }
 
     case PLUGIN_WEBFORM_SAVE: {
-      serialHelper_webformSave(event);
       P094_BAUDRATE = getFormItemInt(P094_BAUDRATE_LABEL);
 
       P094_data_struct *P094_data =
@@ -165,7 +169,7 @@ boolean Plugin_094(byte function, struct EventStruct *event, String& string) {
     case PLUGIN_INIT: {
       const int16_t serial_rx = CONFIG_PIN1;
       const int16_t serial_tx = CONFIG_PIN2;
-      initPluginTaskData(event->TaskIndex, new P094_data_struct());
+      initPluginTaskData(event->TaskIndex, new (std::nothrow) P094_data_struct());
       P094_data_struct *P094_data =
         static_cast<P094_data_struct *>(getPluginTaskData(event->TaskIndex));
 
@@ -185,19 +189,13 @@ boolean Plugin_094(byte function, struct EventStruct *event, String& string) {
       break;
     }
 
-    case PLUGIN_EXIT: {
-      clearPluginTaskData(event->TaskIndex);
-      success = true;
-      break;
-    }
-
     case PLUGIN_FIFTY_PER_SECOND: {
       if (Settings.TaskDeviceEnabled[event->TaskIndex]) {
         P094_data_struct *P094_data =
           static_cast<P094_data_struct *>(getPluginTaskData(event->TaskIndex));
 
         if ((nullptr != P094_data) && P094_data->loop()) {
-          // schedule_task_device_timer(event->TaskIndex, millis() + 10);
+          // Scheduler.schedule_task_device_timer(event->TaskIndex, millis() + 10);
           delay(0); // Processing a full sentence may take a while, run some
                     // background tasks.
           P094_data->getSentence(event->String2);

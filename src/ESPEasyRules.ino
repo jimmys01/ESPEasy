@@ -7,6 +7,9 @@
 #include "src/Globals/Plugins.h"
 #include "src/Globals/Plugins_other.h"
 #include "src/Helpers/ESPEasy_time_calc.h"
+#include "src/Helpers/Numerical.h"
+#include "src/Helpers/StringParser.h"
+
 
 String EventToFileName(const String& eventName) {
   int size  = eventName.length();
@@ -1053,29 +1056,6 @@ bool conditionMatch(const String& check) {
 }
 
 /********************************************************************************************\
-   Check rule timers
- \*********************************************************************************************/
-void rulesTimers() {
-  if (!Settings.UseRules) {
-    return;
-  }
-  // FIXME TD-er:  Maybe not use the timer struct, but add the timers to the scheduler?
-
-  for (byte x = 0; x < RULES_TIMER_MAX; x++) {
-    if (!RulesTimer[x].paused && (RulesTimer[x].timestamp != 0L)) // timer active?
-    {
-      if (timeOutReached(RulesTimer[x].timestamp))                // timer finished?
-      {
-        RulesTimer[x].timestamp = 0L;                             // turn off this timer
-        String event = F("Rules#Timer=");
-        event += x + 1;
-        rulesProcessing(event); // TD-er: Do not add to the eventQueue, but execute right now.
-      }
-    }
-  }
-}
-
-/********************************************************************************************\
    Generate rule events based on task refresh
  \*********************************************************************************************/
 void createRuleEvents(struct EventStruct *event) {
@@ -1087,10 +1067,10 @@ void createRuleEvents(struct EventStruct *event) {
   if (!validDeviceIndex(DeviceIndex)) { return; }
 
   LoadTaskSettings(event->TaskIndex);
-  byte BaseVarIndex = event->TaskIndex * VARS_PER_TASK;
-  byte sensorType   = Device[DeviceIndex].VType;
 
-  for (byte varNr = 0; varNr < Device[DeviceIndex].ValueCount; varNr++) {
+  const byte valueCount = getValueCountForTask(event->TaskIndex);
+
+  for (byte varNr = 0; varNr < valueCount; varNr++) {
     String eventString;
     eventString.reserve(32); // Enough for most use cases, prevent lots of memory allocations.
     eventString  = getTaskDeviceName(event->TaskIndex);
@@ -1098,19 +1078,19 @@ void createRuleEvents(struct EventStruct *event) {
     eventString += ExtraTaskSettings.TaskDeviceValueNames[varNr];
     eventString += F("=");
 
-    switch (sensorType) {
-      case SENSOR_TYPE_LONG:
-        eventString += (unsigned long)UserVar[BaseVarIndex] +
-                       ((unsigned long)UserVar[BaseVarIndex + 1] << 16);
+    switch (event->getSensorType()) {
+      case Sensor_VType::SENSOR_TYPE_LONG:
+        eventString += (unsigned long)UserVar[event->BaseVarIndex] +
+                       ((unsigned long)UserVar[event->BaseVarIndex + 1] << 16);
         break;
-      case SENSOR_TYPE_STRING:
+      case Sensor_VType::SENSOR_TYPE_STRING:
 
         // FIXME TD-er: What to add here? length of string?
         break;
       default:
 
         // FIXME TD-er: Do we need to call formatUserVarNoCheck here? (or with check)
-        eventString += UserVar[BaseVarIndex + varNr];
+        eventString += UserVar[event->BaseVarIndex + varNr];
         break;
     }
     eventQueue.add(eventString);

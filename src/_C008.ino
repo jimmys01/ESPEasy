@@ -1,3 +1,5 @@
+#include "_CPlugin_Helper.h"
+
 #ifdef USES_C008
 //#######################################################################################################
 //########################### Controller Plugin 008: Generic HTTP #######################################
@@ -35,9 +37,13 @@ bool CPlugin_008(CPlugin::Function function, struct EventStruct *event, String& 
 
     case CPlugin::Function::CPLUGIN_INIT:
       {
-        MakeControllerSettings(ControllerSettings);
-        LoadControllerSettings(event->ControllerIndex, ControllerSettings);
-        C008_DelayHandler.configureControllerSettings(ControllerSettings);
+        success = init_c008_delay_queue(event->ControllerIndex);
+        break;
+      }
+
+    case CPlugin::Function::CPLUGIN_EXIT:
+      {
+        exit_c008_delay_queue();
         break;
       }
 
@@ -50,6 +56,10 @@ bool CPlugin_008(CPlugin::Function function, struct EventStruct *event, String& 
 
     case CPlugin::Function::CPLUGIN_PROTOCOL_SEND:
       {
+        if (C008_DelayHandler == nullptr) {
+          break;
+        }
+
         String pubname;
         {
           // Place the ControllerSettings in a scope to free the memory as soon as we got all relevant information.
@@ -63,19 +73,16 @@ bool CPlugin_008(CPlugin::Function function, struct EventStruct *event, String& 
         }
 
         // FIXME TD-er must define a proper move operator
-        byte valueCount = getValueCountFromSensorType(event->sensorType);
-        success = C008_DelayHandler.addToQueue(C008_queue_element(event, valueCount));
+        byte valueCount = getValueCountForTask(event->TaskIndex);
+        success = C008_DelayHandler->addToQueue(C008_queue_element(event, valueCount));
         if (success) {
           // Element was added.
           // Now we try to append to the existing element 
           // and thus preventing the need to create a long string only to copy it to a queue element.
-          C008_queue_element &element = C008_DelayHandler.sendQueue.back();
+          C008_queue_element &element = C008_DelayHandler->sendQueue.back();
 
           // Collect the values at the same run, to make sure all are from the same sample
-          if (ExtraTaskSettings.TaskIndex != event->TaskIndex) {
-            String dummy;
-            PluginCall(PLUGIN_GET_DEVICEVALUENAMES, event, dummy);
-          }
+          LoadTaskSettings(event->TaskIndex);
 
           for (byte x = 0; x < valueCount; x++)
           {
@@ -93,7 +100,7 @@ bool CPlugin_008(CPlugin::Function function, struct EventStruct *event, String& 
             }
           }
         }
-        scheduleNextDelayQueue(TIMER_C008_DELAY_QUEUE, C008_DelayHandler.getNextScheduleTime());
+        Scheduler.scheduleNextDelayQueue(ESPEasy_Scheduler::IntervalTimer_e::TIMER_C008_DELAY_QUEUE, C008_DelayHandler->getNextScheduleTime());
         break;
       }
 

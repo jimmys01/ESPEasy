@@ -1,11 +1,14 @@
 #include "../Commands/UPD.h"
 
-#include "../../ESPEasy_common.h"
-#include "../Commands/Common.h"
-#include "../Globals/Settings.h"
 #include "../../ESPEasy-Globals.h"
-
+#include "../../ESPEasy_common.h"
 #include "../../ESPEasy_fdwdecl.h"
+#include "../Commands/Common.h"
+#include "../Globals/NetworkState.h"
+#include "../Globals/Settings.h"
+#include "../Helpers/Misc.h"
+#include "../Helpers/StringConverter.h"
+#include "../Helpers/StringParser.h"
 
 String Command_UDP_Test(struct EventStruct *event, const char *Line)
 {

@@ -2,6 +2,8 @@
 
 #include "_Plugin_Helper.h"
 #include "src/DataStructs/PinMode.h"
+#include "src/Helpers/Scheduler.h"
+#include "src/Helpers/Audio.h"
 
 // #######################################################################################################
 // #################################### Plugin 001: Input Switch #########################################
@@ -48,7 +50,7 @@ Servo servo2;
 #define PLUGIN_001_BUTTON_TYPE_PUSH_ACTIVE_HIGH  2
 #define PLUGIN_001_DOUBLECLICK_MIN_INTERVAL      1000
 #define PLUGIN_001_DOUBLECLICK_MAX_INTERVAL      3000
-#define PLUGIN_001_LONGPRESS_MIN_INTERVAL        1000
+#define PLUGIN_001_LONGPRESS_MIN_INTERVAL        500
 #define PLUGIN_001_LONGPRESS_MAX_INTERVAL        5000
 #define PLUGIN_001_DC_DISABLED                   0
 #define PLUGIN_001_DC_LOW                        1
@@ -117,7 +119,7 @@ boolean Plugin_001(byte function, struct EventStruct *event, String& string)
     {
       Device[++deviceCount].Number           = PLUGIN_ID_001;
       Device[deviceCount].Type               = DEVICE_TYPE_SINGLE;
-      Device[deviceCount].VType              = SENSOR_TYPE_SWITCH;
+      Device[deviceCount].VType              = Sensor_VType::SENSOR_TYPE_SWITCH;
       Device[deviceCount].Ports              = 0;
       Device[deviceCount].PullUpOption       = true;
       Device[deviceCount].InverseLogicOption = true;
@@ -563,14 +565,14 @@ boolean Plugin_001(byte function, struct EventStruct *event, String& string)
               } else {
                 output_value = sendState ? 1 : 0; // single click
               }
-              event->sensorType = SENSOR_TYPE_SWITCH;
+              event->sensorType = Sensor_VType::SENSOR_TYPE_SWITCH;
 
               if (P001_getSwitchType(event) == PLUGIN_001_TYPE_DIMMER) {
                 if (sendState) {
                   output_value = PCONFIG(1);
 
                   // Only set type to being dimmer when setting a value else it is "switched off".
-                  event->sensorType = SENSOR_TYPE_DIMMER;
+                  event->sensorType = Sensor_VType::SENSOR_TYPE_DIMMER;
                 }
               }
               UserVar[event->BaseVarIndex] = output_value;
@@ -958,8 +960,8 @@ boolean Plugin_001(byte function, struct EventStruct *event, String& string)
           unsigned long timer = time_in_msec ? event->Par3 : event->Par3 * 1000;
 
           // Create a future system timer call to set the GPIO pin back to its normal value.
-//          setPluginTaskTimer(timer, event->TaskIndex, event->Par1, inversePinStateValue);
-          setPluginTimer(timer, PLUGIN_ID_001, event->Par1, inversePinStateValue);
+//          Scheduler.setPluginTaskTimer(timer, event->TaskIndex, event->Par1, inversePinStateValue);
+          Scheduler.setPluginTimer(timer, PLUGIN_ID_001, event->Par1, inversePinStateValue);
           log = String(F("SW   : GPIO ")) + String(event->Par1) +
                 String(F(" Pulse set for ")) + String(event->Par3) + String(time_in_msec ? F(" msec") : F(" sec"));
           addLog(LOG_LEVEL_INFO, log);

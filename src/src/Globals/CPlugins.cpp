@@ -1,10 +1,11 @@
 #include "CPlugins.h"
-#include "../../ESPEasy_plugindefs.h"
 #include "../DataStructs/ESPEasy_EventStruct.h"
+#include "../DataStructs/ESPEasy_plugin_functions.h"
 #include "../DataStructs/TimingStats.h"
 #include "../Globals/Protocol.h"
 #include "../Globals/Settings.h"
 #include "../../ESPEasy_Log.h"
+#include "../../_Plugin_Helper.h"
 
 
 protocolIndex_t   INVALID_PROTOCOL_INDEX   = CPLUGIN_MAX;
@@ -101,6 +102,9 @@ bool CPluginCall(CPlugin::Function Function, struct EventStruct *event, String& 
 
       if (Settings.ControllerEnabled[controllerindex] && supportedCPluginID(Settings.Protocol[controllerindex]))
       {
+        if (Function == CPlugin::Function::CPLUGIN_PROTOCOL_SEND) {
+          checkDeviceVTypeForTask(event);
+        }
         protocolIndex_t ProtocolIndex = getProtocolIndex_from_ControllerIndex(controllerindex);
         CPluginCall(ProtocolIndex, Function, event, str);
       }
@@ -208,7 +212,7 @@ protocolIndex_t getProtocolIndex(cpluginID_t cpluginID)
     if (it != CPlugin_id_to_ProtocolIndex.end())
     {
       if (!validProtocolIndex(it->second)) { return INVALID_PROTOCOL_INDEX; }
-
+      #ifndef BUILD_NO_DEBUG
       if (Protocol[it->second].Number != cpluginID) {
         // FIXME TD-er: Just a check for now, can be removed later when it does not occur.
         String log = F("getProtocolIndex error in Protocol Vector. CPluginID: ");
@@ -217,6 +221,7 @@ protocolIndex_t getProtocolIndex(cpluginID_t cpluginID)
         log += String(it->second);
         addLog(LOG_LEVEL_ERROR, log);
       }
+      #endif
       return it->second;
     }
   }

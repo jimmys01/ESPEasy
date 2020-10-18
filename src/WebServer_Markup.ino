@@ -259,10 +259,13 @@ void addTableSeparator(const String& label, int colspan, int h_size, const Strin
   }
 }
 
-void addFormHeader(const String& header, const String& helpButton)
+void addFormHeader(const String& header, const String& helpButton) {
+  addFormHeader(header, helpButton, F(""));
+}
+void addFormHeader(const String& header, const String& helpButton, const String& rtdHelpButton)
 {
   html_TR();
-  html_table_header(header, helpButton, 225);
+  html_table_header(header, helpButton, rtdHelpButton, 225);
   html_table_header("");
 }
 
@@ -308,6 +311,12 @@ void addCheckBox(const String& id, boolean checked, bool disabled)
 void addNumericBox(const String& id, int value, int min, int max)
 {
   addHtml(F("<input class='widenumber' type='number' name='"));
+  if (value < min) {
+    value = min;
+  }
+  if (value > max) {
+    value = max;
+  }
   String html;
   html.reserve(32 + id.length());
   html += id;
@@ -491,40 +500,6 @@ String makeDocLink(const String& url, bool isRTD) {
   return result;
 }
 
-// ********************************************************************************
-// Add a GPIO pin select dropdown list for 8266, 8285 or ESP32
-// ********************************************************************************
-String createGPIO_label(int gpio, int pinnr, bool input, bool output, bool warning) {
-  if (gpio < 0) { return F("- None -"); }
-  String result;
-  result.reserve(24);
-  result  = F("GPIO-");
-  result += gpio;
-
-  if (pinnr >= 0) {
-    result += F(" (D");
-    result += pinnr;
-    result += ')';
-  }
-
-  if (input != output) {
-    result += ' ';
-    result += input ? F(HTML_SYMBOL_INPUT) : F(HTML_SYMBOL_OUTPUT);
-  }
-
-  if (warning) {
-    result += ' ';
-    result += F(HTML_SYMBOL_WARNING);
-  }
-  bool serialPinConflict = (Settings.UseSerial && (gpio == 1 || gpio == 3));
-
-  if (serialPinConflict) {
-    if (gpio == 1) { result += F(" TX0"); }
-
-    if (gpio == 3) { result += F(" RX0"); }
-  }
-  return result;
-}
 
 void addPinSelect(boolean forI2C, const String& id,  int choice)
 {
@@ -622,6 +597,22 @@ void renderHTMLForPinSelect(String options[], int optionValues[], boolean forI2C
 
       if (Settings.UseSerial && ((optionValues[x] == 1) || (optionValues[x] == 3))) {
         disabled = true;
+      }
+
+      if (Settings.InitSPI != 0) {
+        #ifdef ESP32
+        switch (Settings.InitSPI)
+        {
+        case 1:
+          disabled = (optionValues[x] == 18 || optionValues[x] == 19 || optionValues[x] == 23);
+          break;
+        case 2:
+          disabled = (optionValues[x] == 14 || optionValues[x] == 12 || optionValues[x] == 13);
+          break;
+        }
+        #else // #ifdef ESP32
+        disabled = (optionValues[x] == 14 || optionValues[x] == 12 || optionValues[x] == 13);
+        #endif
       }
     }
     addSelector_Item(options[x],

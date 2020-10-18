@@ -1,6 +1,14 @@
 #ifndef ESPEASY_COMMON_H
 #define ESPEASY_COMMON_H
 
+// *****************************************************************************************
+// For Arduino IDE users:
+// When building using Custom.h, uncomment the next line:
+//#define USE_CUSTOM_H
+// *****************************************************************************************
+
+
+
 #include <stddef.h>
 namespace std
 {
@@ -12,20 +20,22 @@ namespace std
 #include <Arduino.h>
 #include <string.h>
 
-#include "src/Globals/RamTracker.h"
-
 // User configuration
 // Include Custom.h before ESPEasyDefaults.h. 
 #ifdef USE_CUSTOM_H
 #include "Custom.h"
 #endif
 
+#include "src/Globals/RamTracker.h"
 #include "src/DataStructs/ESPEasyDefaults.h"
 
 #ifdef USE_LITTLEFS
   #include <LittleFS.h>
   #define ESPEASY_FS LittleFS
 #else 
+  #ifdef ESP32
+    #include <SPIFFS.h>
+  #endif
   #define ESPEASY_FS SPIFFS
 #endif
 

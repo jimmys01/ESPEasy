@@ -3,6 +3,7 @@
 #include "../../ESPEasy_common.h"
 #include "../../ESPEasy_fdwdecl.h"
 #include "../../ESPEasy_Log.h"
+#include "../../_Plugin_Helper.h"
 #include "../Globals/Settings.h"
 
 #ifdef USES_BLYNK
@@ -33,6 +34,10 @@
 #include "../Commands/UPD.h"
 #include "../Commands/wd.h"
 #include "../Commands/WiFi.h"
+
+#include "../Helpers/Misc.h"
+#include "../Helpers/StringConverter.h"
+#include "../Helpers/StringParser.h"
 
 
 bool checkNrArguments(const char *cmd, const char *Line, int nrArguments) {
@@ -204,9 +209,12 @@ bool executeInternalCommand(const char *cmd, struct EventStruct *event, const ch
       break;
     }
     case 'l': {
-      COMMAND_CASE(          "let", Command_Rules_Let,     2);    // Rules.h
-      COMMAND_CASE(         "load", Command_Settings_Load, 0);    // Settings.h
-      COMMAND_CASE(     "logentry", Command_logentry,      1);    // Diagnostic.h
+      COMMAND_CASE(            "let", Command_Rules_Let,         2);    // Rules.h
+      COMMAND_CASE(           "load", Command_Settings_Load,     0);    // Settings.h
+      COMMAND_CASE(       "logentry", Command_logentry,          1);    // Diagnostic.h
+      COMMAND_CASE(   "looptimerset", Command_Loop_Timer_Set,    3); // Timers.h
+      COMMAND_CASE("looptimerset_ms", Command_Loop_Timer_Set_ms, 3); // Timers.h
+
     #ifndef BUILD_NO_DIAGNOSTIC_COMMANDS
       COMMAND_CASE("logportstatus", Command_logPortStatus, 0);    // Diagnostic.h
       COMMAND_CASE(       "lowmem", Command_Lowmem,        0);    // Diagnostic.h
@@ -282,6 +290,7 @@ bool executeInternalCommand(const char *cmd, struct EventStruct *event, const ch
       COMMAND_CASE(        "timerpause", Command_Timer_Pause,         1); // Timers.h
       COMMAND_CASE(       "timerresume", Command_Timer_Resume,        1); // Timers.h
       COMMAND_CASE(          "timerset", Command_Timer_Set,           2); // Timers.h
+      COMMAND_CASE(       "timerset_ms", Command_Timer_Set_ms,        2); // Timers.h
       COMMAND_CASE(          "timezone", Command_TimeZone,            1); // Time.h
     }
       break;
@@ -382,11 +391,11 @@ bool ExecuteCommand(taskIndex_t taskIndex, EventValueSource::Enum source, const 
     }
   }
 
-  struct EventStruct TempEvent;
-
   // FIXME TD-er: Not sure what happens now, but TaskIndex cannot always be set here
   // since commands can originate from anywhere.
-  TempEvent.TaskIndex = taskIndex;
+  struct EventStruct TempEvent;
+  TempEvent.setTaskIndex(taskIndex);
+  checkDeviceVTypeForTask(&TempEvent);
   TempEvent.Source = source;
 
   String action(Line);
@@ -402,10 +411,10 @@ bool ExecuteCommand(taskIndex_t taskIndex, EventValueSource::Enum source, const 
   // Maybe ExecuteCommand can be scheduled?
   delay(0);
 
-  if (loglevelActiveFor(LOG_LEVEL_INFO)) {
+  if (loglevelActiveFor(LOG_LEVEL_DEBUG)) {
     String log = F("Command: ");
     log += cmd;
-    addLog( LOG_LEVEL_INFO, log);
+    addLog(LOG_LEVEL_DEBUG, log);
 #ifndef BUILD_NO_DEBUG
     addLog(LOG_LEVEL_DEBUG, Line); // for debug purposes add the whole line.
     String parameters;

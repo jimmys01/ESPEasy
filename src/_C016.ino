@@ -1,3 +1,4 @@
+#include "_CPlugin_Helper.h"
 #ifdef USES_C016
 //#######################################################################################################
 //########################### Controller Plugin 016: Controller - Cache #################################
@@ -23,6 +24,8 @@ The controller can save the samples from RTC memory to several places on the fla
 The controller can deliver the data to:
 <TODO>
 */
+
+#include "src/DataStructs/ESPEasyControllerCache.h"
 
 #define CPLUGIN_016
 #define CPLUGIN_ID_016         16
@@ -61,10 +64,14 @@ bool CPlugin_016(CPlugin::Function function, struct EventStruct *event, String& 
 
     case CPlugin::Function::CPLUGIN_INIT:
       {
-        MakeControllerSettings(ControllerSettings);
-        LoadControllerSettings(event->ControllerIndex, ControllerSettings);
-        C016_DelayHandler.configureControllerSettings(ControllerSettings);
+        success = init_c016_delay_queue(event->ControllerIndex);
         ControllerCache.init();
+        break;
+      }
+
+    case CPlugin::Function::CPLUGIN_EXIT:
+      {
+        exit_c016_delay_queue();
         break;
       }
 
@@ -90,15 +97,19 @@ bool CPlugin_016(CPlugin::Function function, struct EventStruct *event, String& 
     case CPlugin::Function::CPLUGIN_PROTOCOL_SEND:
       {
         // Collect the values at the same run, to make sure all are from the same sample
-        byte valueCount = getValueCountFromSensorType(event->sensorType);
+        byte valueCount = getValueCountForTask(event->TaskIndex);
         C016_queue_element element(event, valueCount, node_time.getUnixTime());
         success = ControllerCache.write((uint8_t*)&element, sizeof(element));
 
 /*
+        if (C016_DelayHandler == nullptr) {
+          break;
+        }
+
         MakeControllerSettings(ControllerSettings);
         LoadControllerSettings(event->ControllerIndex, ControllerSettings);
-        success = C016_DelayHandler.addToQueue(element);
-        scheduleNextDelayQueue(TIMER_C016_DELAY_QUEUE, C016_DelayHandler.getNextScheduleTime());
+        success = C016_DelayHandler->addToQueue(element);
+        Scheduler.scheduleNextDelayQueue(ESPEasy_Scheduler::IntervalTimer_e::TIMER_C016_DELAY_QUEUE, C016_DelayHandler->getNextScheduleTime());
 */
         break;
       }
@@ -159,7 +170,7 @@ bool C016_getCSVline(
   unsigned long& timestamp,
   byte& controller_idx,
   byte& TaskIndex,
-  byte& sensorType,
+  Sensor_VType& sensorType,
   byte& valueCount,
   float& val1,
   float& val2,
