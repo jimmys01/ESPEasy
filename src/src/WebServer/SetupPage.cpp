@@ -31,7 +31,9 @@
 #define HANDLE_SETUP_CONNECTING_STAGE 1
 
 void handle_setup() {
+  #ifndef BUILD_NO_RAM_TRACKER
   checkRAM(F("handle_setup"));
+  #endif
 
   // Do not check client IP range allowed.
   TXBuffer.startStream();
@@ -55,8 +57,8 @@ void handle_setup() {
     {
       safe_strncpy(SecuritySettings.WifiKey,  password.c_str(), sizeof(SecuritySettings.WifiKey));
       safe_strncpy(SecuritySettings.WifiSSID, ssid.c_str(),     sizeof(SecuritySettings.WifiSSID));
-      wifiSetupConnect         = true;
-      wifiConnectAttemptNeeded = true;
+      WiFiEventData.wifiSetupConnect         = true;
+      WiFiEventData.wifiConnectAttemptNeeded = true;
 
       if (loglevelActiveFor(LOG_LEVEL_INFO)) {
         String reconnectlog = F("WIFI : Credentials Changed, retry connection. SSID: ");
@@ -156,14 +158,14 @@ void handle_setup_scan_and_show(const String& ssid, const String& other, const S
   addSubmitButton(F("Connect"), "");
 }
 
-bool handle_setup_connectingStage(byte& refreshCount) {
+bool handle_setup_connectingStage(byte refreshCount) {
   if (refreshCount > 0)
   {
     //      safe_strncpy(SecuritySettings.WifiSSID, "ssid", sizeof(SecuritySettings.WifiSSID));
     //      SecuritySettings.WifiKey[0] = 0;
     addButton(F("/setup"), F("Back to Setup"));
     html_BR();
-    wifiSetupConnect = false;
+    WiFiEventData.wifiSetupConnect = false;
     return false;
   }
   int wait = WIFI_RECONNECT_WAIT / 1000;
@@ -219,7 +221,7 @@ void handle_setup_finish() {
   html_end_table();
   html_end_form();
 
-  wifiSetup = false;
+  WiFiEventData.wifiSetup = false;
   sendHeadandTail_stdtemplate(_TAIL);
 }
 

@@ -36,7 +36,9 @@
 void sendData(struct EventStruct *event)
 {
   START_TIMER;
+  #ifndef BUILD_NO_RAM_TRACKER
   checkRAM(F("sendData"));
+  #endif
   LoadTaskSettings(event->TaskIndex);
 
   if (Settings.UseRules) {
@@ -257,14 +259,14 @@ String getMQTTclientID(const ControllerSettingsStruct& ControllerSettings) {
   parseSystemVariables(clientid, false);
   clientid.replace(' ', '_'); // Make sure no spaces are present in the client ID
 
-  if ((wifi_reconnects >= 1) && ControllerSettings.mqtt_uniqueMQTTclientIdReconnect()) {
+  if ((WiFiEventData.wifi_reconnects >= 1) && ControllerSettings.mqtt_uniqueMQTTclientIdReconnect()) {
     // Work-around for 'lost connections' to the MQTT broker.
     // If the broker thinks the connection is still alive, a reconnect from the
     // client will be refused.
     // To overcome this issue, append the number of reconnects to the client ID to
     // make it different from the previous one.
     clientid += '_';
-    clientid += wifi_reconnects;
+    clientid += WiFiEventData.wifi_reconnects;
   }
   return clientid;
 }
@@ -417,6 +419,7 @@ bool SourceNeedsStatusUpdate(EventValueSource::Enum eventSource)
 
 void SendStatus(EventValueSource::Enum source, const String& status)
 {
+  if (status.length() == 0) return;
   switch (source)
   {
     case EventValueSource::Enum::VALUE_SOURCE_HTTP:
@@ -477,6 +480,11 @@ void MQTTStatus(const String& status)
   controllerIndex_t enabledMqttController = firstEnabledMQTT_ControllerIndex();
 
   if (validControllerIndex(enabledMqttController)) {
+    controllerIndex_t DomoticzMQTT_controllerIndex = findFirstEnabledControllerWithId(2);
+    if (DomoticzMQTT_controllerIndex == enabledMqttController) {
+      // Do not send MQTT status updates to Domoticz
+      return;
+    }
     String pubname;
     bool mqtt_retainFlag;
     {
@@ -519,7 +527,9 @@ void MQTTStatus(const String& status)
 void SensorSendTask(taskIndex_t TaskIndex)
 {
   if (!validTaskIndex(TaskIndex)) return;
+  #ifndef BUILD_NO_RAM_TRACKER
   checkRAM(F("SensorSendTask"));
+  #endif
   if (Settings.TaskDeviceEnabled[TaskIndex])
   {
     bool success = false;

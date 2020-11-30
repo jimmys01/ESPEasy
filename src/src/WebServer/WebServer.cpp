@@ -91,7 +91,9 @@ void sendHeadandTail(const String& tmplName, boolean Tail, boolean rebooting) {
     // TODO TD-er: Should send data directly to TXBuffer instead of using large strings.
     getWebPageTemplateDefault(tmplName, pageTemplate);
   }
+  #ifndef BUILD_NO_RAM_TRACKER
   checkRAM(F("sendWebPage"));
+  #endif
 
   // web activity timer
   lastWeb = millis();
@@ -573,7 +575,7 @@ void getWebPageTemplateVar(const String& varName)
 
   else if (varName == F("logo"))
   {
-    if (ESPEASY_FS.exists(F("esp.png")))
+    if (fileExists(F("esp.png")))
     {
       addHtml(F("<img src=\"esp.png\" width=48 height=48 align=right>"));
     }
@@ -581,7 +583,7 @@ void getWebPageTemplateVar(const String& varName)
 
   else if (varName == F("css"))
   {
-    if (ESPEASY_FS.exists(F("esp.css"))) // now css is written in writeDefaultCSS() to FS and always present
+    if (fileExists(F("esp.css"))) // now css is written in writeDefaultCSS() to FS and always present
     // if (0) //TODO
     {
       addHtml(F("<link rel=\"stylesheet\" type=\"text/css\" href=\"esp.css\">"));
@@ -635,26 +637,28 @@ void writeDefaultCSS(void)
 {
   return; // TODO
 
-  if (!ESPEASY_FS.exists(F("esp.css")))
-  {
-    String defaultCSS;
+#ifndef BUILD_NO_DEBUG
 
+  if (!fileExists(F("esp.css")))
+  {
     fs::File f = tryOpenFile(F("esp.css"), "w");
 
     if (f)
     {
+      String defaultCSS;
+      defaultCSS = PGMT(DATA_ESPEASY_DEFAULT_MIN_CSS);
       if (loglevelActiveFor(LOG_LEVEL_INFO)) {
         String log = F("CSS  : Writing default CSS file to FS (");
         log += defaultCSS.length();
         log += F(" bytes)");
         addLog(LOG_LEVEL_INFO, log);
       }
-      defaultCSS = PGMT(DATA_ESPEASY_DEFAULT_MIN_CSS);
       f.write((const unsigned char *)defaultCSS.c_str(), defaultCSS.length()); // note: content must be in RAM - a write of F("XXX") does
                                                                                // not work
       f.close();
     }
   }
+#endif
 }
 
 // ********************************************************************************
