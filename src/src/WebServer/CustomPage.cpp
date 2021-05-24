@@ -49,6 +49,8 @@ boolean handle_custom(String path) {
     return false;    // unknown file that does not exist...
   }
 
+  if (!isLoggedIn()) { return false; }
+
   if (dashboardPage) // for the dashboard page, create a default unit dropdown selector
   {
     // handle page redirects to other unit's as requested by the unit dropdown selector
@@ -124,12 +126,12 @@ boolean handle_custom(String path) {
     html_add_button_prefix();
     addHtml(path);
     addHtml(F("?btnunit="));
-    addHtml(String(prev));
+    addHtmlInt(prev);
     addHtml(F("'>&lt;</a>"));
     html_add_button_prefix();
     addHtml(path);
     addHtml(F("?btnunit="));
-    addHtml(String(next));
+    addHtmlInt(next);
     addHtml(F("'>&gt;</a>"));
   }
 
@@ -147,7 +149,7 @@ boolean handle_custom(String path) {
 
   if (dataFile)
   {
-    String page = "";
+    String page;
     page.reserve(dataFile.size());
 
     while (dataFile.available()) {

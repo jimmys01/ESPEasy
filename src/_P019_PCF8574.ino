@@ -3,6 +3,7 @@
 
 #include "src/DataStructs/PinMode.h"
 #include "src/Commands/GPIO.h"
+#include "src/ESPEasyCore/ESPEasyGPIO.h"
 
 // #######################################################################################################
 // #################################### Plugin 019: PCF8574 ##############################################
@@ -552,7 +553,7 @@ boolean Plugin_019(byte function, struct EventStruct *event, String& string)
       success = true;
       break;
     }
-
+/*
     case PLUGIN_REQUEST:
     {
       // parseString(string, 1) = device
@@ -571,7 +572,7 @@ boolean Plugin_019(byte function, struct EventStruct *event, String& string)
       }
       break;
     }
-
+*/
     case PLUGIN_WRITE:
     {
       //String log;

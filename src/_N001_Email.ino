@@ -12,7 +12,16 @@
 #define NPLUGIN_001_TIMEOUT 5000
 
 #include "src/DataStructs/NotificationSettingsStruct.h"
+#include "src/ESPEasyCore/ESPEasy_Log.h"
+#include "src/ESPEasyCore/ESPEasy_backgroundtasks.h"
 #include "src/Globals/NPlugins.h"
+#include "src/Globals/Settings.h"
+#include "src/Helpers/ESPEasy_Storage.h"
+#include "src/Helpers/ESPEasy_time_calc.h"
+#include "src/Helpers/Networking.h"
+#include "src/Helpers/StringParser.h"
+#include "src/Helpers/_CPlugin_Helper.h" // safeReadStringUntil
+
 
 // The message body is included in event->String1
 
@@ -38,7 +47,7 @@ boolean NPlugin_001(NPlugin::Function function, struct EventStruct *event, Strin
 		// Edwin: NPlugin::Function::NPLUGIN_WRITE seems to be not implemented/not used yet? Disabled because its confusing now.
 		// case NPlugin::Function::NPLUGIN_WRITE:
 		//   {
-		//     String log = "";
+		//     String log;
 		//     String command = parseString(string, 1);
 		//
 		//     if (command == F("email"))
@@ -57,7 +66,7 @@ boolean NPlugin_001(NPlugin::Function function, struct EventStruct *event, Strin
 			LoadNotificationSettings(event->NotificationIndex, (byte*)&NotificationSettings, sizeof(NotificationSettingsStruct));
 			NotificationSettings.validate();
 			String subject = NotificationSettings.Subject;
-			String body = "";
+			String body;
 			if (event->String1.length() > 0)
 				body = event->String1;
 			else
@@ -88,7 +97,7 @@ boolean NPlugin_001_send(const NotificationSettingsStruct& notificationsettings,
 	client.setTimeout(CONTROLLER_CLIENTTIMEOUT_DFLT);
 	String aHost = notificationsettings.Server;
 	addLog(LOG_LEVEL_DEBUG, String(F("EMAIL: Connecting to ")) + aHost + notificationsettings.Port);
-	if (!connectClient(client, aHost.c_str(), notificationsettings.Port)) {
+	if (!connectClient(client, aHost.c_str(), notificationsettings.Port, CONTROLLER_CLIENTTIMEOUT_DFLT)) {
 		addLog(LOG_LEVEL_ERROR, String(F("EMAIL: Error connecting to ")) + aHost + notificationsettings.Port);
 		myStatus = false;
 	}else {
@@ -110,10 +119,10 @@ boolean NPlugin_001_send(const NotificationSettingsStruct& notificationsettings,
 			mailheader.replace(String(F("$emailfrom")), notificationsettings.Sender);
 		} else {
 			String senderName = email_address.substring(0, pos_less);
-			senderName.replace("\"", ""); // Remove quotes
+			senderName.replace(F("\""), F("")); // Remove quotes
 			String address = email_address.substring(pos_less + 1);
-			address.replace("<", "");
-			address.replace(">", "");
+			address.replace(F("<"), F(""));
+			address.replace(F(">"), F(""));
 			address.trim();
 			senderName.trim();
 			mailheader.replace(String(F("$nodename")), senderName);
@@ -125,7 +134,7 @@ boolean NPlugin_001_send(const NotificationSettingsStruct& notificationsettings,
 		mailheader.replace(String(F("$ato")), notificationsettings.Receiver);
 		mailheader.replace(String(F("$subject")), aSub);
 		mailheader.replace(String(F("$espeasyversion")), String(BUILD));
-		aMesg.replace("\r", F("<br/>")); // re-write line breaks for Content-type: text/html
+		aMesg.replace(F("\r"), F("<br/>")); // re-write line breaks for Content-type: text/html
 
 		// Wait for Client to Start Sending
 		// The MTA Exchange
@@ -137,7 +146,7 @@ boolean NPlugin_001_send(const NotificationSettingsStruct& notificationsettings,
 
 			bool nextAddressAvailable = true;
 			int i = 0;
-			String emailTo = "";
+			String emailTo;
 			if (!getNextMailAddress(notificationsettings.Receiver, emailTo, i)) {
 				addLog(LOG_LEVEL_ERROR, F("Email: No recipient given"));
 				break;

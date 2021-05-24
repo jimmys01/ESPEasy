@@ -25,6 +25,8 @@
 
 #include "src/PluginStructs/P016_data_struct.h"
 
+#include "src/ESPEasyCore/Serial.h"
+
 #ifdef P016_P035_Extended_AC
 #include <IRac.h>
 #endif
@@ -520,8 +522,7 @@ boolean Plugin_016(byte function, struct EventStruct *event, String &string)
     if (P016_SEND_IR_TO_CONTROLLER)  sendData(event);
     else {
       unsigned long IRcode = results.value;
-      UserVar[event->BaseVarIndex] = (IRcode & 0xFFFF);
-      UserVar[event->BaseVarIndex + 1] = ((IRcode >> 16) & 0xFFFF);
+      UserVar.setSensorTypeLong(event->TaskIndex, IRcode);
       sendData(event);
       }
     }

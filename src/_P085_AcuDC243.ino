@@ -58,6 +58,7 @@
 
 #include <ESPeasySerial.h>
 #include "src/Helpers/Modbus_RTU.h"
+#include "src/DataStructs/ESPEasy_packed_raw_data.h"
 
 struct P085_data_struct : public PluginTaskData_base {
   P085_data_struct() {}
@@ -223,7 +224,7 @@ boolean Plugin_085(byte function, struct EventStruct *event, String& string) {
 
           if (errorcode == 0) {
             addRowLabel(F("Mode of data logging"));
-            addHtml(String(value));
+            addHtmlInt(value);
           }
           value = P085_data->modbus.readHoldingRegister(0x502, errorcode);
 
@@ -363,6 +364,7 @@ boolean Plugin_085(byte function, struct EventStruct *event, String& string) {
 #ifdef USES_PACKED_RAW_DATA
     case PLUGIN_GET_PACKED_RAW_DATA:
     {
+      // FIXME TD-er: Same code as in P102, share in LoRa code.
       P085_data_struct *P085_data =
         static_cast<P085_data_struct *>(getPluginTaskData(event->TaskIndex));
 

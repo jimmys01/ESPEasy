@@ -173,6 +173,7 @@ void addRowLabel(const String& label, const String& id)
     html += ':';
     addHtml(html);
   }
+  addHtml(F("</td>"));
   html_TD();
 }
 
@@ -304,7 +305,7 @@ void addNumericBox(const String& id, int value, int min, int max)
   addHtml('>');
 }
 
-void addFloatNumberBox(const String& id, float value, float min, float max)
+void addFloatNumberBox(const String& id, float value, float min, float max, byte nrDecimals, float stepsize)
 {
   String html;
 
@@ -314,13 +315,22 @@ void addFloatNumberBox(const String& id, float value, float min, float max)
   html += id;
   html += '\'';
   html += F(" min=");
-  html += String(min, 6);
+  html += String(min, nrDecimals);
   html += F(" max=");
-  html += String(max, 6);
-  html += F(" step=0.000001");
+  html += String(max, nrDecimals);
+  html += F(" step=");
+  if (stepsize <= 0.0f) {
+    html += F("0.");
+    for (byte i = 1; i < nrDecimals; ++i) {
+      html += '0';
+    }
+    html += '1';
+  } else {
+    html += String(stepsize, nrDecimals);
+  }
 
   html += F(" style='width:7em;' value=");
-  html += String(value, 6);
+  html += String(value, nrDecimals);
   html += '>';
 
   addHtml(html);
@@ -395,11 +405,13 @@ void addTextArea(const String& id, const String& value, int maxlength, int rows,
 // adds a Help Button with points to the the given Wiki Subpage
 // If url starts with "RTD", it will be considered as a Read-the-docs link
 void addHelpButton(const String& url) {
+#ifndef WEBPAGE_TEMPLATE_HIDE_HELP_BUTTON
   if (url.startsWith("RTD")) {
     addRTDHelpButton(url.substring(3));
   } else {
     addHelpButton(url, false);
   }
+#endif
 }
 
 void addRTDHelpButton(const String& url)
@@ -409,10 +421,12 @@ void addRTDHelpButton(const String& url)
 
 void addHelpButton(const String& url, bool isRTD)
 {
+  #ifndef WEBPAGE_TEMPLATE_HIDE_HELP_BUTTON
   addHtmlLink(
     F("button help"),
     makeDocLink(url, isRTD),
     isRTD ? F("&#8505;") : F("&#10068;"));
+  #endif
 }
 
 void addRTDPluginButton(pluginID_t taskDeviceNumber) {

@@ -70,6 +70,7 @@ DF - Below doesn't look right; needs a RS485 to TTL(3.3v) level converter (see h
 
 #include <ESPeasySerial.h>
 #include "src/Helpers/Modbus_RTU.h"
+#include "src/DataStructs/ESPEasy_packed_raw_data.h"
 
 struct P108_data_struct : public PluginTaskData_base {
   P108_data_struct() {}
@@ -317,6 +318,32 @@ boolean Plugin_108(byte function, struct EventStruct *event, String& string) {
       }
       break;
     }
+
+#ifdef USES_PACKED_RAW_DATA
+    case PLUGIN_GET_PACKED_RAW_DATA:
+    {
+      // FIXME TD-er: Same code as in P102, share in LoRa code.
+      P108_data_struct *P108_data =
+        static_cast<P108_data_struct *>(getPluginTaskData(event->TaskIndex));
+
+      if ((nullptr != P108_data) && P108_data->isInitialized()) {
+        // Matching JS code:
+        // return decode(bytes, [header, uint8, int32_1e4, uint8, int32_1e4, uint8, int32_1e4, uint8, int32_1e4],
+        //   ['header', 'unit1', 'val_1', 'unit2', 'val_2', 'unit3', 'val_3', 'unit4', 'val_4']);
+        for (byte i = 0; i < VARS_PER_TASK; ++i) {
+          const byte pconfigIndex = i + P108_QUERY1_CONFIG_POS;
+          const byte choice       = PCONFIG(pconfigIndex);
+          string += LoRa_addInt(choice, PackedData_uint8);
+          string += LoRa_addFloat(UserVar[event->BaseVarIndex + i], PackedData_int32_1e4);
+        }
+        event->Par1 = 8; // valuecount 
+        
+        success = true;
+      }
+      break;
+    }
+#endif // USES_PACKED_RAW_DATA
+
   }
   return success;
 }

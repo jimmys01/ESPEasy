@@ -2,7 +2,7 @@
 
 
 #include "../../ESPEasy_common.h"
-#include "../../ESPEasy_fdwdecl.h"
+
 #include "../../ESPEasy-Globals.h"
 
 #include "../DataStructs/TimingStats.h"
@@ -17,10 +17,14 @@
 # include "../Globals/MQTT.h"
 #endif // ifdef USES_MQTT
 #include "../Globals/NetworkState.h"
+#include "../Globals/RuntimeData.h"
 #include "../Globals/Settings.h"
+#include "../Globals/Statistics.h"
 
 #include "../Helpers/CompiletimeDefines.h"
 #include "../Helpers/Hardware.h"
+#include "../Helpers/Misc.h"
+#include "../Helpers/Numerical.h"
 #include "../Helpers/StringConverter.h"
 #include "../Helpers/StringProvider.h"
 
@@ -85,6 +89,7 @@ void SystemVariables::parseSystemVariables(String& s, boolean useURLencode)
 
     switch (enumval)
     {
+      case BOOT_CAUSE:        value = String(lastBootCause); break; // Integer value to be used in rules
       case BSSID:             value = String((WiFiEventData.WiFiDisconnected()) ? F("00:00:00:00:00:00") : WiFi.BSSIDstr()); break;
       case CR:                value = "\r"; break;
       case IP:                value = getValue(LabelType::IP_ADDRESS); break;
@@ -163,7 +168,8 @@ void SystemVariables::parseSystemVariables(String& s, boolean useURLencode)
       case UNIXDAY:           value = String(node_time.getUnixTime() / 86400); break;
       case UNIXDAY_SEC:       value = String(node_time.getUnixTime() % 86400); break;
       case UNIXTIME:          value = String(node_time.getUnixTime()); break;
-      case UPTIME:            value = String(wdcounter / 2); break;
+      case UPTIME:            value = String(getUptimeMinutes()); break;
+      case UPTIME_MS:         value = ull2String(getMicros64() / 1000); break;
       #if FEATURE_ADC_VCC
       case VCC:               value = String(vcc); break;
       #else // if FEATURE_ADC_VCC
@@ -185,30 +191,25 @@ void SystemVariables::parseSystemVariables(String& s, boolean useURLencode)
         break;
       default:
 
-        if (useURLencode) {
-          value = URLEncode(value.c_str());
-        }
-        s.replace(SystemVariables::toString(enumval), value);
+        repl(SystemVariables::toString(enumval), value, s, useURLencode);
         break;
     }
   }
   while (enumval != SystemVariables::Enum::UNKNOWN);
 
-  const int v_index = s.indexOf("%v");
+  int v_index = s.indexOf(F("%v"));
 
-  if ((v_index != -1) && isDigit(s[v_index + 2])) {
-    for (byte i = 0; i < CUSTOM_VARS_MAX; ++i) {
-      String key = "%v" + String(i + 1) + '%';
-
+  while ((v_index != -1)) {
+    unsigned int i;
+    if (validUIntFromString(s.substring(v_index + 2), i)) {
+      const String key = String(F("%v")) + String(i) + '%';
       if (s.indexOf(key) != -1) {
-        String value = String(customFloatVar[i]);
-
-        if (useURLencode) {
-          value = URLEncode(value.c_str());
-        }
-        s.replace(key, value);
+        const bool trimTrailingZeros = true;
+        const String value = doubleToString(getCustomFloatVar(i), 6, trimTrailingZeros);
+        repl(key, value, s, useURLencode);
       }
     }
+    v_index = s.indexOf(F("%v"), v_index + 1); // Find next occurance
   }
 
   STOP_TIMER(PARSE_SYSVAR);
@@ -260,6 +261,7 @@ SystemVariables::Enum SystemVariables::nextReplacementEnum(const String& str, Sy
 String SystemVariables::toString(SystemVariables::Enum enumval)
 {
   switch (enumval) {
+    case Enum::BOOT_CAUSE:      return F("%bootcause%");
     case Enum::BSSID:           return F("%bssid%");
     case Enum::CR:              return F("%CR%");
     case Enum::IP4:             return F("%ip4%");
@@ -326,6 +328,7 @@ String SystemVariables::toString(SystemVariables::Enum enumval)
     case Enum::UNIXDAY_SEC:     return F("%unixday_sec%");
     case Enum::UNIXTIME:        return F("%unixtime%");
     case Enum::UPTIME:          return F("%uptime%");
+    case Enum::UPTIME_MS:       return F("%uptime_ms%");
     case Enum::VCC:             return F("%vcc%");
     case Enum::WI_CH:           return F("%wi_ch%");
     case Enum::UNKNOWN: break;

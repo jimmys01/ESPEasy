@@ -19,19 +19,25 @@ class IPAddress;
 // FIXME: change original code so it uses String and String.toInt()
 unsigned long str2int(const char *string);
 
+String        ull2String(uint64_t value,
+                         uint8_t  base = 10);
+
 /********************************************************************************************\
    Check if valid float and convert string to float.
  \*********************************************************************************************/
-bool          string2float(const String& string,
-                           float       & floatvalue);
+bool string2float(const String& string,
+                  float       & floatvalue);
+
 
 /********************************************************************************************\
    Convert a char string to IP byte array
  \*********************************************************************************************/
-boolean str2ip(const String& string,
+bool isIP(const String& string);
+
+bool str2ip(const String& string,
                byte         *IP);
 
-boolean str2ip(const char *string,
+bool str2ip(const char *string,
                byte       *IP);
 
 String  formatIP(const IPAddress& ip);
@@ -109,9 +115,16 @@ String get_formatted_Controller_number(cpluginID_t cpluginID);
 /*********************************************************************************************\
    Wrap a string with given pre- and postfix string.
 \*********************************************************************************************/
-void wrap_String(const String& string,
-                 const String& wrap,
-                 String      & result);
+String wrap_String(const String& string,
+                   char wrap);
+                   
+void   wrap_String(const String& string,
+                   const String& wrap,
+                   String      & result);
+
+String wrapIfContains(const String& value,
+                      char          contains,
+                      char          wrap = '\"');
 
 /*********************************************************************************************\
    Format an object value pair for use in JSON.
@@ -152,19 +165,24 @@ String to_internal_string(const String& input,
     // FIXME TD-er: parseString* should use index starting at 0.
 \*********************************************************************************************/
 String parseString(const String& string,
-                   byte          indexFind);
+                   byte          indexFind,
+                   char          separator = ',');
 
 String parseStringKeepCase(const String& string,
-                           byte          indexFind);
+                           byte          indexFind,
+                           char          separator = ',');
 
 String parseStringToEnd(const String& string,
-                        byte          indexFind);
+                        byte          indexFind,
+                        char          separator = ',');
 
 String parseStringToEndKeepCase(const String& string,
-                                byte          indexFind);
+                                byte          indexFind,
+                                char          separator = ',');
 
 String tolerantParseStringKeepCase(const String& string,
-                                   byte          indexFind);
+                                   byte          indexFind,
+                                   char          separator = ',');
 
 // escapes special characters in strings for use in html-forms
 bool   htmlEscapeChar(char    c,
@@ -182,26 +200,31 @@ String URLEncode(const char *msg);
 void   repl(const String& key,
             const String& val,
             String      & s,
-            boolean       useURLencode);
+            bool       useURLencode);
 
 #ifndef BUILD_NO_SPECIAL_CHARACTERS_STRINGCONVERTER
 void parseSpecialCharacters(String& s,
-                            boolean useURLencode);
-#endif
+                            bool useURLencode);
+#endif // ifndef BUILD_NO_SPECIAL_CHARACTERS_STRINGCONVERTER
 
 /********************************************************************************************\
    replace other system variables like %sysname%, %systime%, %ip%
  \*********************************************************************************************/
 void parseControllerVariables(String            & s,
                               struct EventStruct *event,
-                              boolean             useURLencode);
+                              bool             useURLencode);
+
+void parseSingleControllerVariable(String            & s,
+                                   struct EventStruct *event,
+                                   byte                taskValueIndex,
+                                   bool             useURLencode);
 
 void parseSystemVariables(String& s,
-                          boolean useURLencode);
+                          bool useURLencode);
 
 void parseEventVariables(String            & s,
                          struct EventStruct *event,
-                         boolean             useURLencode);
+                         bool             useURLencode);
 
 bool getConvertArgument(const String& marker,
                         const String& s,
@@ -225,14 +248,22 @@ bool getConvertArgumentString(const String& marker,
 // Parse conversions marked with "%conv_marker%(float)"
 // Must be called last, since all sensor values must be converted, processed, etc.
 void parseStandardConversions(String& s,
-                              boolean useURLencode);
+                              bool useURLencode);
 
 
-bool HasArgv(const char *string, unsigned int argc);
+bool HasArgv(const char  *string,
+             unsigned int argc);
 
-bool GetArgv(const char *string, String& argvString, unsigned int argc);
+bool GetArgv(const char  *string,
+             String     & argvString,
+             unsigned int argc,
+             char         separator = ',');
 
-bool GetArgvBeginEnd(const char *string, const unsigned int argc, int& pos_begin, int& pos_end);
+bool GetArgvBeginEnd(const char        *string,
+                     const unsigned int argc,
+                     int              & pos_begin,
+                     int              & pos_end,
+                     char               separator = ',');
 
 
 #endif // HELPERS_STRINGCONVERTER_H

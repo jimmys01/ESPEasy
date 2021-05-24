@@ -7,7 +7,7 @@
 // #######################################################################################################
 
 
-# include "AS_BH1750.h"
+# include <AS_BH1750.h>
 
 # define PLUGIN_010
 # define PLUGIN_ID_010         10
@@ -128,7 +128,7 @@ boolean Plugin_010(byte function, struct EventStruct *event, String& string)
         log += F(" Mode: 0x");
         log += String(mode);
         log += F(" : Light intensity: ");
-        log += UserVar[event->BaseVarIndex];
+        log += formatUserVarNoCheck(event->TaskIndex, 0);
         addLog(LOG_LEVEL_INFO, log);
         success = true;
       }

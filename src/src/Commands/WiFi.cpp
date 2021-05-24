@@ -8,8 +8,8 @@
 #include "../ESPEasyCore/Serial.h"
 
 #include "../Globals/ESPEasyWiFiEvent.h"
+#include "../Globals/RTC.h"
 #include "../Globals/Settings.h"
-#include "../Globals/ESPEasyWiFiEvent.h"
 
 #include "../Helpers/StringConverter.h"
 
@@ -67,7 +67,9 @@ String Command_Wifi_Connect(struct EventStruct *event, const char *Line)
 
 String Command_Wifi_Disconnect(struct EventStruct *event, const char *Line)
 {
+  RTC.clearLastWiFi(); // Force a WiFi scan
   WifiDisconnect();
+
   return return_command_success();
 }
 
@@ -113,6 +115,12 @@ String Command_Wifi_Mode(struct EventStruct *event, const char *Line)
     result += getWifiModeString(WiFi.getMode());
     return return_result(event, result);
   }
+  return return_command_success();
+}
+
+String Command_Wifi_AllowAP(struct EventStruct *event, const char* Line)
+{
+  Settings.DoNotStartAP(false);
   return return_command_success();
 }
 

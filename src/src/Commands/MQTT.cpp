@@ -59,10 +59,10 @@ String Command_MQTT_Publish(struct EventStruct *event, const char *Line)
 
     bool success = false;
     if (value[0] != '=') {
-      success = MQTTpublish(enabledMqttController, topic.c_str(), value.c_str(), mqtt_retainFlag);
+      success = MQTTpublish(enabledMqttController, INVALID_TASK_INDEX, topic.c_str(), value.c_str(), mqtt_retainFlag);
     }
     else {
-      success = MQTTpublish(enabledMqttController, topic.c_str(), String(event->Par2).c_str(), mqtt_retainFlag);
+      success = MQTTpublish(enabledMqttController, INVALID_TASK_INDEX,  topic.c_str(), String(event->Par2).c_str(), mqtt_retainFlag);
     }
     if (success) {
       return return_command_success();
@@ -76,6 +76,7 @@ boolean MQTTsubscribe(controllerIndex_t controller_idx, const char* topic, boole
 {
   if (MQTTclient.subscribe(topic)) {
     Scheduler.setIntervalTimerOverride(ESPEasy_Scheduler::IntervalTimer_e::TIMER_MQTT, 10); // Make sure the MQTT is being processed as soon as possible.
+    scheduleNextMQTTdelayQueue();
     String log = F("Subscribed to: ");  log += topic;
     addLog(LOG_LEVEL_INFO, log);
     return true;

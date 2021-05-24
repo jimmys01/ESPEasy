@@ -1,15 +1,16 @@
 #include "../Commands/Blynk.h"
 
-#include "../../ESPEasy_fdwdecl.h"
 #include "../Commands/Common.h"
 #include "../DataStructs/ESPEasy_EventStruct.h"
+#include "../ESPEasyCore/ESPEasy_backgroundtasks.h"
 #include "../ESPEasyCore/ESPEasy_Log.h"
 #include "../Globals/Protocol.h"
 #include "../Globals/Settings.h"
-#include "../Helpers/_CPlugin_Helper.h"
 #include "../Helpers/ESPEasy_Storage.h"
 #include "../Helpers/ESPEasy_time_calc.h"
+#include "../Helpers/_CPlugin_Helper.h"
 
+#include "../../ESPEasy_fdwdecl.h"
 
 #ifdef USES_C012
 
@@ -145,8 +146,8 @@ bool Blynk_get(const String& command, controllerIndex_t controllerIndex, float *
         byte   pos      = strValue.indexOf('"', 2);
         strValue = strValue.substring(2, pos);
         strValue.trim();
-        float value = strValue.toFloat();
-        *data   = value;
+        *data   = 0.0f;
+        validFloatFromString(strValue, *data);
         success = true;
 
         char value_char[5] = { 0 };

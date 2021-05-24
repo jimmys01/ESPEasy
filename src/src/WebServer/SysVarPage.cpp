@@ -6,6 +6,8 @@
 #include "../WebServer/Markup_Forms.h"
 #include "../WebServer/HTML_wrappers.h"
 
+#include "../Globals/RuntimeData.h"
+
 #include "../Helpers/StringConverter.h"
 #include "../Helpers/SystemVariables.h"
 
@@ -78,6 +80,7 @@ void handle_sysvars() {
   addSysVar_enum_html(SystemVariables::SYSHEAP);
   addSysVar_enum_html(SystemVariables::SYSSTACK);
   addSysVar_enum_html(SystemVariables::SYSNAME);
+  addSysVar_enum_html(SystemVariables::BOOT_CAUSE);
 #if FEATURE_ADC_VCC
   addSysVar_enum_html(SystemVariables::VCC);
 #endif // if FEATURE_ADC_VCC
@@ -117,6 +120,7 @@ void handle_sysvars() {
   addSysVar_enum_html(SystemVariables::SYSWEEKDAY_S);
   addTableSeparator(F("System"), 3, 3);
   addSysVar_enum_html(SystemVariables::UPTIME);
+  addSysVar_enum_html(SystemVariables::UPTIME_MS);
   addSysVar_enum_html(SystemVariables::UNIXTIME);
   addSysVar_enum_html(SystemVariables::UNIXDAY);
   addSysVar_enum_html(SystemVariables::UNIXDAY_SEC);
@@ -127,8 +131,16 @@ void handle_sysvars() {
 
   addTableSeparator(F("Custom Variables"), 3, 3);
 
-  for (byte i = 0; i < CUSTOM_VARS_MAX; ++i) {
-    addSysVar_html("%v" + toString(i + 1, 0) + '%');
+  bool customVariablesAdded = false;
+  for (auto it = customFloatVar.begin(); it != customFloatVar.end(); ++it) {
+    addSysVar_html("%v" + String(it->first) + '%');
+    customVariablesAdded = true;
+  }
+  if (!customVariablesAdded) {
+    html_TR_TD();
+    addHtml(F("No variables set"));
+    html_TD();
+    html_TD();
   }
 #ifndef BUILD_NO_SPECIAL_CHARACTERS_STRINGCONVERTER
   addTableSeparator(F("Special Characters"), 3, 2);
@@ -192,6 +204,8 @@ void handle_sysvars() {
   addSysVar_html(F("{D}C to {D}F: %c_c2f%(20.4)"));
   addSysVar_html(F("m/s to Bft:   %c_ms2Bft%(5.1)"));
   addSysVar_html(F("Dew point(T,H): %c_dew_th%(18.6,67)"));
+  addSysVar_html(F("Altitude(air,sea): %c_alt_pres_sea%(850,1000)"));
+  addSysVar_html(F("PressureElevation(air,alt): %c_sea_pres_alt%(850,1350.03)"));
   addFormSeparator(3);
   addSysVar_html(F("cm to imperial: %c_cm2imp%(190)"));
   addSysVar_html(F("mm to imperial: %c_mm2imp%(1900)"));
