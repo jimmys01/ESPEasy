@@ -9,10 +9,14 @@
 #include "../Globals/Services.h"
 
 #include "../Helpers/ESPEasy_time_calc.h"
+#include "../Helpers/Convert.h"
 
 
-
-#define CHUNKED_BUFFER_SIZE          400
+#ifdef ESP8266
+#define CHUNKED_BUFFER_SIZE         512
+#else 
+#define CHUNKED_BUFFER_SIZE         1360
+#endif
 
 Web_StreamingBuffer::Web_StreamingBuffer(void) : lowMemorySkip(false),
   initialRam(0), beforeTXRam(0), duringTXRam(0), finalRam(0), maxCoreUsage(0),
@@ -40,12 +44,16 @@ Web_StreamingBuffer& Web_StreamingBuffer::operator+=(char a)                   {
   return addString(String(a));
 }
 
-Web_StreamingBuffer& Web_StreamingBuffer::operator+=(long unsigned int a)     {
+Web_StreamingBuffer& Web_StreamingBuffer::operator+=(long unsigned int a)      {
   return addString(String(a));
 }
 
-Web_StreamingBuffer& Web_StreamingBuffer::operator+=(float a)                  {
-  return addString(String(a));
+Web_StreamingBuffer& Web_StreamingBuffer::operator+=(const float& a)           {
+  return addString(toString(a, 2));
+}
+
+Web_StreamingBuffer& Web_StreamingBuffer::operator+=(const double& a)          {
+  return addString(doubleToString(a));
 }
 
 Web_StreamingBuffer& Web_StreamingBuffer::operator+=(int a)                    {
