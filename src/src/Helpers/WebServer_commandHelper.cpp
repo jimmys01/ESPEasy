@@ -22,16 +22,16 @@ HandledWebCommand_result handle_command_from_web(EventValueSource::Enum source, 
 
   bool handledCmd = false;
   bool sendOK     = false;
-  printWebString = "";
+  printWebString = String();
   printToWeb     = false;
   printToWebJSON = false;
 
   // in case of event, store to buffer and return...
   String command = parseString(webrequest, 1);
 
-  if ((command == F("event")) || (command == F("asyncevent")))
+  if ((command.equals(F("event"))) || (command.equals(F("asyncevent"))))
   {
-    eventQueue.addMove(parseStringToEnd(webrequest, 2));
+    eventQueue.addMove(parseStringToEndKeepCase(webrequest, 2));
     handledCmd = true;
     sendOK     = true;
   } else if (command.equals(F("taskrun")) ||

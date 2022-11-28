@@ -19,12 +19,12 @@
 
 #include <HLW8012.h>
 
-HLW8012 *Plugin_076_hlw = NULL;
+HLW8012 *Plugin_076_hlw = nullptr;
 
 #define PLUGIN_076
 #define PLUGIN_ID_076 76
 #define PLUGIN_076_DEBUG true // activate extra log info in the debug
-#define PLUGIN_NAME_076 "Energy (AC) - HLW8012/BL0937  [TESTING]"
+#define PLUGIN_NAME_076 "Energy (AC) - HLW8012/BL0937"
 #define PLUGIN_VALUENAME1_076 "Voltage"
 #define PLUGIN_VALUENAME2_076 "Current"
 #define PLUGIN_VALUENAME3_076 "Power"
@@ -41,10 +41,10 @@ int StoredTaskIndex = -1;
 uint8_t p076_read_stage = 0;
 unsigned long p076_timer = 0;
 
-double p076_hcurrent = 0.0f;
-unsigned int p076_hvoltage = 0;
-unsigned int p076_hpower = 0;
-unsigned int p076_hpowfact = 0;
+float p076_hcurrent = 0.0f;
+float p076_hvoltage = 0;
+float p076_hpower = 0;
+float p076_hpowfact = 0;
 
 #define P076_Custom       0
 
@@ -65,8 +65,8 @@ unsigned int p076_hpowfact = 0;
 // Keep values as they are stored and increase this when adding new ones.
 #define MAX_P076_DEVICE   11
 
-void ICACHE_RAM_ATTR p076_hlw8012_cf1_interrupt();
-void ICACHE_RAM_ATTR p076_hlw8012_cf_interrupt();
+void IRAM_ATTR p076_hlw8012_cf1_interrupt();
+void IRAM_ATTR p076_hlw8012_cf_interrupt();
 
 
 bool p076_getDeviceString(int device, String& name) {
@@ -125,6 +125,7 @@ boolean Plugin_076(uint8_t function, struct EventStruct *event, String &string) 
     Device[deviceCount].SendDataOption = true;
     Device[deviceCount].TimerOption = true;
     Device[deviceCount].GlobalSyncOption = false;
+    Device[deviceCount].PluginStats        = true;
     break;
   }
 
@@ -146,9 +147,9 @@ boolean Plugin_076(uint8_t function, struct EventStruct *event, String &string) 
   }
 
   case PLUGIN_GET_DEVICEGPIONAMES: {
-    event->String1 = formatGpioName_output("SEL");
-    event->String2 = formatGpioName_input("CF1");
-    event->String3 = formatGpioName_input("CF");
+    event->String1 = formatGpioName_output(F("SEL"));
+    event->String2 = formatGpioName_input(F("CF1"));
+    event->String3 = formatGpioName_input(F("CF"));
     break;
   }
 
@@ -259,9 +260,11 @@ boolean Plugin_076(uint8_t function, struct EventStruct *event, String &string) 
     if (hlwMultipliers[0] > 1.0 && hlwMultipliers[1] > 1.0 && hlwMultipliers[2] > 1.0) {
       SaveCustomTaskSettings(event->TaskIndex, reinterpret_cast<const uint8_t *>(&hlwMultipliers),
                              sizeof(hlwMultipliers));
+      #ifndef BUILD_NO_DEBUG
       if (PLUGIN_076_DEBUG) {
         addLog(LOG_LEVEL_INFO, F("P076: Saved Calibration from Config Page"));
       }
+      #endif
 
       if (Plugin_076_hlw) {
         Plugin_076_hlw->setCurrentMultiplier(hlwMultipliers[0]);
@@ -269,11 +272,14 @@ boolean Plugin_076(uint8_t function, struct EventStruct *event, String &string) 
         Plugin_076_hlw->setPowerMultiplier(hlwMultipliers[2]);
       }
 
+#ifndef BUILD_NO_DEBUG
       if (PLUGIN_076_DEBUG) {
         addLog(LOG_LEVEL_INFO, F("P076: Multipliers Reassigned"));
       }
+#endif
     }
 
+#ifndef BUILD_NO_DEBUG
     if (PLUGIN_076_DEBUG) {
       String log = F("P076: PIN Settings ");
 
@@ -283,8 +289,9 @@ boolean Plugin_076(uint8_t function, struct EventStruct *event, String &string) 
       log +=  PCONFIG(5);
       log +=  F(" cf1_edge: ");
       log +=  PCONFIG(6);
-      addLog(LOG_LEVEL_INFO, log);
+      addLogMove(LOG_LEVEL_INFO, log);
     }
+#endif
 
     success = true;
     break;
@@ -340,6 +347,7 @@ boolean Plugin_076(uint8_t function, struct EventStruct *event, String &string) 
         
         // Measurement is complete.
         p076_read_stage = 0;
+#ifndef BUILD_NO_DEBUG
         if (PLUGIN_076_DEBUG) {
           String log = F("P076: Read values");
           log += F(" - V=");
@@ -350,8 +358,9 @@ boolean Plugin_076(uint8_t function, struct EventStruct *event, String &string) 
           log += p076_hpower;
           log += F(" - Pf%=");
           log += p076_hpowfact;
-          addLog(LOG_LEVEL_INFO, log);
+          addLogMove(LOG_LEVEL_INFO, log);
         }
+#endif
         UserVar[event->BaseVarIndex] = p076_hvoltage;
         UserVar[event->BaseVarIndex + 1] = p076_hcurrent;
         UserVar[event->BaseVarIndex + 2] = p076_hpower;
@@ -385,21 +394,27 @@ boolean Plugin_076(uint8_t function, struct EventStruct *event, String &string) 
         Plugin_076_hlw->begin(CF_PIN, CF1_PIN, SEL_PIN, currentRead,
                               true); // set use_interrupts to true to use
                                      // interrupts to monitor pulse widths
+#ifndef BUILD_NO_DEBUG
         if (PLUGIN_076_DEBUG){
           addLog(LOG_LEVEL_INFO, F("P076: Init object done"));
         }
+#endif
         Plugin_076_hlw->setResistors(HLW_CURRENT_RESISTOR,
                                      HLW_VOLTAGE_RESISTOR_UP,
                                      HLW_VOLTAGE_RESISTOR_DOWN);
+#ifndef BUILD_NO_DEBUG
         if (PLUGIN_076_DEBUG){
           addLog(LOG_LEVEL_INFO, F("P076: Init Basic Resistor Values done"));
         }
+#endif
 
         double current, voltage, power;
         if (Plugin076_LoadMultipliers(event->TaskIndex, current, voltage, power)) {
+#ifndef BUILD_NO_DEBUG
           if (PLUGIN_076_DEBUG){
             addLog(LOG_LEVEL_INFO, F("P076: Saved Calibration after INIT"));
           }
+#endif
 
           Plugin_076_hlw->setCurrentMultiplier(current);
           Plugin_076_hlw->setVoltageMultiplier(voltage);
@@ -408,15 +423,18 @@ boolean Plugin_076(uint8_t function, struct EventStruct *event, String &string) 
           Plugin076_ResetMultipliers();
         }
 
+#ifndef BUILD_NO_DEBUG
         if (PLUGIN_076_DEBUG){
           addLog(LOG_LEVEL_INFO, F("P076: Applied Calibration after INIT"));
         }
+#endif
         StoredTaskIndex = event->TaskIndex; // store task index value in order to
                                             // use it in the PLUGIN_WRITE routine
 
         // Library expects an interrupt on both edges
         attachInterrupt(CF1_PIN, p076_hlw8012_cf1_interrupt, cf1_trigger);
         attachInterrupt(CF_PIN, p076_hlw8012_cf_interrupt, cf_trigger);
+
         success = true;
       }
     }
@@ -432,14 +450,15 @@ boolean Plugin_076(uint8_t function, struct EventStruct *event, String &string) 
       }
 
       if (command.equalsIgnoreCase(F("hlwcalibrate"))) {
-        unsigned int CalibVolt = 0;
-        double CalibCurr = 0;
-        unsigned int CalibAcPwr = 0;
-        if (validUIntFromString(parseString(string, 2), CalibVolt)) {
-          if (validDoubleFromString(parseString(string, 3), CalibCurr)) {
-            validUIntFromString(parseString(string, 4), CalibAcPwr);
+        float CalibVolt = 0;
+        float CalibCurr = 0;
+        float CalibAcPwr = 0;
+        if (validFloatFromString(parseString(string, 2), CalibVolt)) {
+          if (validFloatFromString(parseString(string, 3), CalibCurr)) {
+            validFloatFromString(parseString(string, 4), CalibAcPwr);
           }
         }
+#ifndef BUILD_NO_DEBUG
         if (PLUGIN_076_DEBUG) {
           String log = F("P076: Calibration to values");
           log += F(" - Expected-V=");
@@ -448,8 +467,9 @@ boolean Plugin_076(uint8_t function, struct EventStruct *event, String &string) 
           log += CalibCurr;
           log += F(" - Expected-W=");
           log += CalibAcPwr;
-          addLog(LOG_LEVEL_INFO, log);
+          addLogMove(LOG_LEVEL_INFO, log);
         }
+#endif
         bool changed = false;
         if (CalibVolt != 0) {
           Plugin_076_hlw->expectedVoltage(CalibVolt);
@@ -481,9 +501,11 @@ void Plugin076_ResetMultipliers() {
   if (Plugin_076_hlw) {
     Plugin_076_hlw->resetMultipliers();
     Plugin076_SaveMultipliers();
+#ifndef BUILD_NO_DEBUG
     if (PLUGIN_076_DEBUG){
       addLog(LOG_LEVEL_INFO, F("P076: Reset Multipliers to DEFAULT"));
     }
+#endif
   }
 }
 
@@ -552,13 +574,13 @@ void Plugin076_Reset(taskIndex_t TaskIndex) {
 
 // When using interrupts we have to call the library entry point
 // whenever an interrupt is triggered
-void ICACHE_RAM_ATTR p076_hlw8012_cf1_interrupt() {
+void IRAM_ATTR p076_hlw8012_cf1_interrupt() {
   if (Plugin_076_hlw) {
     Plugin_076_hlw->cf1_interrupt();
   }
 }
 
-void ICACHE_RAM_ATTR p076_hlw8012_cf_interrupt() {
+void IRAM_ATTR p076_hlw8012_cf_interrupt() {
   if (Plugin_076_hlw) {
     Plugin_076_hlw->cf_interrupt();
   }

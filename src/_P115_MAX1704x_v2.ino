@@ -17,7 +17,7 @@
 
 # define PLUGIN_115
 # define PLUGIN_ID_115     115           // plugin id
-# define PLUGIN_NAME_115   "Energy - Fuel Gauge MAX1704x [TESTING]"
+# define PLUGIN_NAME_115   "Energy - Fuel Gauge MAX1704x"
 # define PLUGIN_VALUENAME1_115 "Voltage" // Battery voltage
 # define PLUGIN_VALUENAME2_115 "SOC"     // Battery state of charge in percentage
 # define PLUGIN_VALUENAME3_115 "Alert"   // (0 or 1) Alert when the battery SoC gets too low
@@ -48,9 +48,10 @@ boolean Plugin_115(uint8_t function, struct EventStruct *event, String& string)
       Device[deviceCount].SendDataOption     = true;
       Device[deviceCount].TimerOption        = true;
 
-      // Device[deviceCount].TimerOptional = false;
-      Device[deviceCount].GlobalSyncOption = true;
-      Device[deviceCount].DecimalsOnly     = true;
+      // Device[deviceCount].TimerOptional   = false;
+      Device[deviceCount].GlobalSyncOption   = true;
+      Device[deviceCount].DecimalsOnly       = true;
+      Device[deviceCount].PluginStats        = true;
       break;
     }
 
@@ -102,12 +103,13 @@ boolean Plugin_115(uint8_t function, struct EventStruct *event, String& string)
     {
       {
         unsigned int choice = P115_DEVICESELECTOR;
-        const __FlashStringHelper * options[4];
-        options[0]          = F("MAX17043");
-        options[1]          = F("MAX17044 (2S)"); // 2-cell version of the MAX17043 (full-scale range of 10V)
-        options[2]          = F("MAX17048");
-        options[3]          = F("MAX17049 (2S)"); // 2-cell version of the MAX17048
-        int optionValues[4] = {
+        const __FlashStringHelper * options[4] = {
+          F("MAX17043"),
+          F("MAX17044 (2S)"), // 2-cell version of the MAX17043 (full-scale range of 10V)
+          F("MAX17048"),
+          F("MAX17049 (2S)") // 2-cell version of the MAX17048
+        };
+        const int optionValues[4] = {
           MAX1704X_MAX17043,
           MAX1704X_MAX17044,
           MAX1704X_MAX17048,
@@ -116,7 +118,7 @@ boolean Plugin_115(uint8_t function, struct EventStruct *event, String& string)
       }
 
       addFormNumericBox(F("Alert threshold"), F("plugin_115_threshold"), P115_THRESHOLD, 1, 32);
-      addUnit(F("%"));
+      addUnit('%');
       addFormCheckBox(F("Send Event on Alert"), F("plugin_115_alertevent"), P115_ALERTEVENT);
 
       success = true;
@@ -155,7 +157,7 @@ boolean Plugin_115(uint8_t function, struct EventStruct *event, String& string)
           log += P115_data->alert;
           log += F(" Rate: ");
           log += P115_data->changeRate;
-          addLog(LOG_LEVEL_INFO, log);
+          addLogMove(LOG_LEVEL_INFO, log);
         }
         success = true;
       }
@@ -169,7 +171,7 @@ boolean Plugin_115(uint8_t function, struct EventStruct *event, String& string)
       if ((nullptr != P115_data) && P115_data->initialized) {
         const String command = parseString(string, 1);
 
-        if ((command == F("max1704xclearalert")))
+        if ((command.equals(F("max1704xclearalert"))))
         {
           P115_data->clearAlert();
           success = true;
@@ -194,7 +196,6 @@ boolean Plugin_115(uint8_t function, struct EventStruct *event, String& string)
                 const deviceIndex_t DeviceIndex = getDeviceIndex_from_TaskIndex(event->TaskIndex);
 
                 if (validDeviceIndex(DeviceIndex)) {
-                  LoadTaskSettings(event->TaskIndex);
                   String newEvent = getTaskDeviceName(event->TaskIndex);
                   newEvent += '#';
                   newEvent += F("AlertTriggered");

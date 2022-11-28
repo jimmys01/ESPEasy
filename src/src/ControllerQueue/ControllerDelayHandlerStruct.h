@@ -1,6 +1,8 @@
 #ifndef CONTROLLERQUEUE_CONTROLLER_DELAY_HANDLER_STRUCT_H
 #define CONTROLLERQUEUE_CONTROLLER_DELAY_HANDLER_STRUCT_H
 
+#include "../../ESPEasy_common.h"
+
 #include "../DataStructs/ControllerSettingsStruct.h"
 #include "../DataStructs/TimingStats.h"
 #include "../DataStructs/UnitMessageCount.h"
@@ -11,6 +13,7 @@
 #include "../Helpers/_CPlugin_Helper.h"
 #include "../Helpers/ESPEasy_Storage.h"
 #include "../Helpers/ESPEasy_time_calc.h"
+#include "../Helpers/Memory.h"
 #include "../Helpers/Networking.h"
 #include "../Helpers/Scheduler.h"
 #include "../Helpers/StringConverter.h"
@@ -84,9 +87,18 @@ struct ControllerDelayHandlerStruct {
     if (sendQueue.size() >= max_queue_depth) { return true; }
 
     // Number of elements is not exceeding the limit, check memory
-    int freeHeap = ESP.getFreeHeap();
+    int freeHeap = FreeMem();
+    {
+      #ifdef USE_SECOND_HEAP
+      const int freeHeap2 = FreeMem2ndHeap();
+      if (freeHeap2 < freeHeap) {
+        freeHeap = freeHeap2;
+      }
+      #endif
+    }
 
-    if (freeHeap > 5000) { return false; // Memory is not an issue.
+    if (freeHeap > 5000) { 
+      return false; // Memory is not an issue.
     }
 #ifndef BUILD_NO_DEBUG
 
@@ -100,7 +112,7 @@ struct ControllerDelayHandlerStruct {
       log += F(" items ");
       log += freeHeap;
       log += F(" free");
-      addLog(LOG_LEVEL_DEBUG, log);
+      addLogMove(LOG_LEVEL_DEBUG, log);
     }
 #endif // ifndef BUILD_NO_DEBUG
     return true;
@@ -128,7 +140,7 @@ struct ControllerDelayHandlerStruct {
             const cpluginID_t cpluginID = getCPluginID_from_ControllerIndex(it->controller_idx);
             String log = get_formatted_Controller_number(cpluginID);
             log += F(" : Remove duplicate");
-            addLog(LOG_LEVEL_DEBUG, log);
+            addLogMove(LOG_LEVEL_DEBUG, log);
           }
 #endif // ifndef BUILD_NO_DEBUG
           return true;
@@ -155,7 +167,13 @@ struct ControllerDelayHandlerStruct {
     }
 
     if (!queueFull(element)) {
+      #ifdef USE_SECOND_HEAP
+      HeapSelectIram ephemeral;
+      sendQueue.push_back(element);
+      #else
       sendQueue.push_back(std::move(element));
+      #endif
+
       return true;
     }
 #ifndef BUILD_NO_DEBUG
@@ -163,8 +181,8 @@ struct ControllerDelayHandlerStruct {
     if (loglevelActiveFor(LOG_LEVEL_DEBUG)) {
       const cpluginID_t cpluginID = getCPluginID_from_ControllerIndex(element.controller_idx);
       String log = get_formatted_Controller_number(cpluginID);
-      log += " : queue full";
-      addLog(LOG_LEVEL_DEBUG, log);
+      log += F(" : queue full");
+      addLogMove(LOG_LEVEL_DEBUG, log);
     }
 #endif // ifndef BUILD_NO_DEBUG
     return false;
@@ -294,20 +312,16 @@ struct ControllerDelayHandlerStruct {
   void process_c##NNN####M##_delay_queue() {                                                                           \
     if (C##NNN####M##_DelayHandler == nullptr) return;                                                                 \
     C##NNN####M##_queue_element *element(C##NNN####M##_DelayHandler->getNext());                                       \
-    if (element == nullptr) return;                                                                                       \
-    MakeControllerSettings(ControllerSettings);                                                                         \
-    bool ready = true;                                                                                                 \
-    if (!AllocatedControllerSettings()) {                                                                              \
-      ready = false;                                                                                                   \
-    } else {                                                                                                           \
-      LoadControllerSettings(element->controller_idx, ControllerSettings);                                             \
-      C##NNN####M##_DelayHandler->configureControllerSettings(ControllerSettings);                                     \
-      if (!C##NNN####M##_DelayHandler->readyToProcess(*element)) { ready = false; }                                    \
-    }                                                                                                                  \
-    if (ready) {                                                                                                       \
-      START_TIMER;                                                                                                     \
-      C##NNN####M##_DelayHandler->markProcessed(do_process_c##NNN####M##_delay_queue(M, *element, ControllerSettings)); \
-      STOP_TIMER(C##NNN####M##_DELAY_QUEUE);                                                                           \
+    if (element == nullptr) return;                                                                                    \
+    if (C##NNN####M##_DelayHandler->readyToProcess(*element)) {                                                        \
+      MakeControllerSettings(ControllerSettings);                                                                      \
+      if (AllocatedControllerSettings()) {                                                                             \
+        LoadControllerSettings(element->controller_idx, ControllerSettings);                                           \
+        C##NNN####M##_DelayHandler->configureControllerSettings(ControllerSettings);                                   \
+        START_TIMER;                                                                                                   \
+        C##NNN####M##_DelayHandler->markProcessed(do_process_c##NNN####M##_delay_queue(M, *element, ControllerSettings)); \
+        STOP_TIMER(C##NNN####M##_DELAY_QUEUE);                                                                           \
+      }                                                                                                                \
     }                                                                                                                  \
     Scheduler.scheduleNextDelayQueue(ESPEasy_Scheduler::IntervalTimer_e::TIMER_C##NNN####M##_DELAY_QUEUE, C##NNN####M##_DelayHandler->getNextScheduleTime());         \
   }                                                                                                                    \

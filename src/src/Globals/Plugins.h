@@ -1,16 +1,16 @@
 #ifndef GLOBALS_PLUGIN_H
 #define GLOBALS_PLUGIN_H
 
+#include "../../ESPEasy_common.h"
+
 #include <map>
 #include <vector>
 #include "../CustomBuild/ESPEasyLimits.h"
-#include "../DataStructs/ESPEasy_EventStruct.h"
 
 #include "../DataTypes/PluginID.h"
 #include "../DataTypes/DeviceIndex.h"
 #include "../DataTypes/TaskIndex.h"
 
-#include "../../ESPEasy_common.h"
 
 
 /********************************************************************************************\
@@ -41,7 +41,7 @@
    - USERVAR_MAX_INDEX = (TASKS_MAX * VARS_PER_TASK)
  \*********************************************************************************************/
 
-
+struct EventStruct;
 
 extern int deviceCount;
 
@@ -80,16 +80,15 @@ deviceIndex_t getDeviceIndex_from_TaskIndex(taskIndex_t taskIndex);
 pluginID_t getPluginID_from_TaskIndex(taskIndex_t taskIndex);
 
 
-
 /********************************************************************************************\
    Find Device Index given a plugin ID
  \*********************************************************************************************/
 deviceIndex_t getDeviceIndex(pluginID_t Number);
 
 String        getPluginNameFromDeviceIndex(deviceIndex_t deviceIndex);
-#if USE_I2C_DEVICE_SCAN
+#if FEATURE_I2C_DEVICE_SCAN
 bool          checkPluginI2CAddressFromDeviceIndex(deviceIndex_t deviceIndex, uint8_t i2cAddress);
-#endif // if USE_I2C_DEVICE_SCAN
+#endif // if FEATURE_I2C_DEVICE_SCAN
 String        getPluginNameFromPluginID(pluginID_t pluginID);
 
 void          sortDeviceIndexArray();

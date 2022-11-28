@@ -2,21 +2,21 @@
 
 #include "../../ESPEasy_common.h"
 #include "../Commands/Common.h"
+
+
+#if FEATURE_SD
+
 #include "../ESPEasyCore/Serial.h"
 #include "../Globals/Settings.h"
-
-
-
-
-#ifdef FEATURE_SD
+#include "../Helpers/StringConverter.h"
 
 #include <SD.h>
 
 
-void printDirectory(File dir, int numTabs)
+void printDirectory(fs::File dir, int numTabs)
 {
   while (true) {
-    File entry = dir.openNextFile();
+    fs::File entry = dir.openNextFile();
 
     if (!entry) {
       // no more files
@@ -43,7 +43,7 @@ void printDirectory(File dir, int numTabs)
 
 const __FlashStringHelper * Command_SD_LS(struct EventStruct *event, const char* Line)
 {
-  File root = SD.open("/");
+  fs::File root = SD.open("/");
   root.rewindDirectory();
   printDirectory(root, 0);
   root.close();
@@ -55,9 +55,7 @@ String Command_SD_Remove(struct EventStruct *event, const char* Line)
   // FIXME TD-er: This one is not using parseString* function
   String fname = Line;
   fname = fname.substring(9);
-  String result = F("Removing:");
-  result += fname.c_str();
   SD.remove((char*)fname.c_str());
-  return return_result(event, result);
+  return return_result(event, concat(F("Removing:"), fname));
 }
 #endif

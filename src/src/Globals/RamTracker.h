@@ -50,8 +50,13 @@ void checkRAMtoLog(void);
 void checkRAM(const String& flashString,
               int           a);
 
+void checkRAM(const __FlashStringHelper * flashString,
+              const String& a);
+void checkRAM(const __FlashStringHelper * flashString,
+              const __FlashStringHelper * a);
 void checkRAM(const String& flashString,
               const String& a);
+
 
 void checkRAM(const __FlashStringHelper *  descr);
 void checkRAM(const String& descr);

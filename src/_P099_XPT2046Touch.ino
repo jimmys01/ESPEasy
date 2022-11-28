@@ -31,7 +31,7 @@
 
 #define PLUGIN_099
 #define PLUGIN_ID_099         99
-#define PLUGIN_NAME_099       "Touch - XPT2046 on a TFT display [TESTING]"
+#define PLUGIN_NAME_099       "Touch - XPT2046 on a TFT display"
 #define PLUGIN_VALUENAME1_099 "X"
 #define PLUGIN_VALUENAME2_099 "Y"
 #define PLUGIN_VALUENAME3_099 "Z"
@@ -204,10 +204,8 @@ boolean Plugin_099(uint8_t function, struct EventStruct *event, String& string)
 
         bool tbUseCalibration = bitRead(P099_CONFIG_FLAGS, P099_FLAGS_USE_CALIBRATION);
         {
-          const __FlashStringHelper * options4[2] = { F("No"), F("Yes") };
-          int optionValues4[2] = { 0, 1 };
           int choice4 = tbUseCalibration ? 1 : 0;
-          addFormSelector(F("Calibrate to screen resolution"), F("p099_use_calibration"), 2, options4, optionValues4, choice4, true);
+          addFormSelector_YesNo(F("Calibrate to screen resolution"), F("p099_use_calibration"), choice4, true);
         }
         if (tbUseCalibration) {
 
@@ -275,7 +273,7 @@ boolean Plugin_099(uint8_t function, struct EventStruct *event, String& string)
             addTextBox(getPluginCustomArgName(objectNr),
                       String(P099_data->StoredSettings.TouchObjects[objectNr].objectname),
                       P099_MaxObjectNameLength - 1,
-                      false, false, EMPTY_STRING, EMPTY_STRING);
+                      false, false, EMPTY_STRING, F(""));
             html_TD();
             addNumericBox(getPluginCustomArgName(objectNr + 100), P099_data->StoredSettings.TouchObjects[objectNr].top_left.x,     0, 65535);
             html_TD();
@@ -360,9 +358,11 @@ boolean Plugin_099(uint8_t function, struct EventStruct *event, String& string)
         addHtmlError(error);
       }
 #ifdef PLUGIN_099_DEBUG
-      String log = F("p099_data save size: ");
-      log += sizeof(P099_data->StoredSettings);
-      addLog(LOG_LEVEL_INFO, log);
+      if (loglevelActiveFor(LOG_LEVEL_INFO)) {
+        String log = F("p099_data save size: ");
+        log += sizeof(P099_data->StoredSettings);
+        addLogMove(LOG_LEVEL_INFO, log);
+      }
 #endif // PLUGIN_099_DEBUG
       SaveCustomTaskSettings(event->TaskIndex, reinterpret_cast<const uint8_t *>(&(P099_data->StoredSettings)), sizeof(P099_data->StoredSettings) /*+ sizeof(P099_data->TouchObjects)*/);
       delete P099_data;
@@ -404,15 +404,7 @@ boolean Plugin_099(uint8_t function, struct EventStruct *event, String& string)
 
     case PLUGIN_EXIT:
     {
-      P099_data_struct *P099_data = static_cast<P099_data_struct *>(getPluginTaskData(event->TaskIndex));
-
-      if (nullptr == P099_data) {
-        return success;
-      }
-      clearPluginTaskData(event->TaskIndex);
-      P099_data = nullptr;
       success = true;
-
       break;
     }
 
@@ -422,8 +414,6 @@ boolean Plugin_099(uint8_t function, struct EventStruct *event, String& string)
     {
       String command;
       String subcommand;
-      String arguments;
-      arguments.reserve(24);
 
       int argIndex = string.indexOf(',');
       if (argIndex) {
@@ -437,23 +427,19 @@ boolean Plugin_099(uint8_t function, struct EventStruct *event, String& string)
         }
         if (command.equals(F("touch"))) {
           if(subcommand.equals(F("rot"))) { // touch,rot,<0..3> : Set rotation to 0, 90, 180, 270 degrees
-            arguments = parseString(string, 3);
-            uint8_t rot_ = static_cast<uint8_t>(arguments.toInt() % 4);
+            uint8_t rot_ = static_cast<uint8_t>(parseString(string, 3).toInt() % 4);
 
             P099_data->setRotation(rot_);
             success = true;
           } else if (subcommand.equals(F("flip"))) { // touch,flip,<0|1> : Flip rotation by 0 or 180 degrees
-            arguments = parseString(string, 3);
-            bool flip_ = (arguments.toInt() > 0);
+            bool flip_ = (parseString(string, 3).toInt() > 0);
 
             P099_data->setRotationFlipped(flip_);
             success = true;
           } else if (subcommand.equals(F("enable"))) { // touch,enable,<objectName> : Enables a disabled objectname (with a leading underscore)
-            arguments = parseString(string, 3);
-            success = P099_data->setTouchObjectState(arguments, true, P099_CONFIG_OBJECTCOUNT);
+            success = P099_data->setTouchObjectState(parseString(string, 3), true, P099_CONFIG_OBJECTCOUNT);
           } else if (subcommand.equals(F("disable"))) { // touch,disable,<objectName> : Disables an enabled objectname (without a leading underscore)
-            arguments = parseString(string, 3);
-            success = P099_data->setTouchObjectState(arguments, false, P099_CONFIG_OBJECTCOUNT);
+            success = P099_data->setTouchObjectState(parseString(string, 3), false, P099_CONFIG_OBJECTCOUNT);
           }
         }
       }
@@ -485,18 +471,19 @@ boolean Plugin_099(uint8_t function, struct EventStruct *event, String& string)
             bool bEnableCalibrationLog = bitRead(P099_CONFIG_FLAGS, P099_FLAGS_LOG_CALIBRATION);
             if (bEnableCalibrationLog && loglevelActiveFor(LOG_LEVEL_INFO)) { // REQUIRED for calibration and setting up objects, so do not make this optional!
               String log;
-              log.reserve(72);
-              log = F("Touch calibration rx= "); // Space before the logged values was added for readability
-              log += rx;
-              log += F(", ry= ");
-              log += ry;
-              log += F("; z= "); // Always log the z value even if not used.
-              log += z;
-              log += F(", x= ");
-              log += x;
-              log += F(", y= ");
-              log += y;
-              addLog(LOG_LEVEL_INFO, log);
+              if (log.reserve(72)) {
+                log = F("Touch calibration rx= "); // Space before the logged values was added for readability
+                log += rx;
+                log += F(", ry= ");
+                log += ry;
+                log += F("; z= "); // Always log the z value even if not used.
+                log += z;
+                log += F(", x= ");
+                log += x;
+                log += F(", y= ");
+                log += y;
+                addLogMove(LOG_LEVEL_INFO, log);
+              }
             }
 
             if (Settings.UseRules) { // No events to handle if rules not enabled
@@ -525,7 +512,7 @@ boolean Plugin_099(uint8_t function, struct EventStruct *event, String& string)
                         P099_data->TouchTimers[selectedObjectIndex] = 0;
                         String eventCommand;
                         eventCommand.reserve(48);
-                        eventCommand = getTaskDeviceName(event->TaskIndex);
+                        eventCommand += getTaskDeviceName(event->TaskIndex);
                         eventCommand += '#';
                         eventCommand += selectedObjectName;
                         eventCommand += '='; // Add arguments
@@ -534,14 +521,14 @@ boolean Plugin_099(uint8_t function, struct EventStruct *event, String& string)
                         } else {
                           eventCommand += (P099_data->TouchStates[selectedObjectIndex] ? '1' : '0'); // Act like a button, 1 = On, 0 = Off
                         }
-                        eventQueue.add(eventCommand);
+                        eventQueue.addMove(std::move(eventCommand));
                       }
                     }
                   } else {
                     // Matching object is found, send <TaskDeviceName>#<ObjectName> event with x, y and z as %eventvalue1/2/3%
                     String eventCommand;
                     eventCommand.reserve(48);
-                    eventCommand = getTaskDeviceName(event->TaskIndex);
+                    eventCommand += getTaskDeviceName(event->TaskIndex);
                     eventCommand += '#';
                     eventCommand += selectedObjectName;
                     eventCommand += '='; // Add arguments
@@ -550,7 +537,7 @@ boolean Plugin_099(uint8_t function, struct EventStruct *event, String& string)
                     eventCommand += y;
                     eventCommand += ',';
                     eventCommand += z;
-                    eventQueue.add(eventCommand);
+                    eventQueue.addMove(std::move(eventCommand));
                   }
                 }
               }

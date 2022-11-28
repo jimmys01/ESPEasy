@@ -31,7 +31,7 @@
 
 #define PLUGIN_058
 #define PLUGIN_ID_058         58
-#define PLUGIN_NAME_058       "Keypad - HT16K33 [TESTING]"
+#define PLUGIN_NAME_058       "Keypad - HT16K33"
 #define PLUGIN_VALUENAME1_058 "ScanCode"
 
 
@@ -129,7 +129,7 @@ boolean Plugin_058(uint8_t function, struct EventStruct *event, String& string)
           if (loglevelActiveFor(LOG_LEVEL_INFO)) {
             String log = F("Mkey : key=0x");
             log += String(key, 16);
-            addLog(LOG_LEVEL_INFO, log);
+            addLogMove(LOG_LEVEL_INFO, log);
           }
 
           sendData(event);

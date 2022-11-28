@@ -1,20 +1,29 @@
 #include "../PluginStructs/P094_data_struct.h"
 
+#ifdef USES_P094
+
 // Needed also here for PlatformIO's library finder as the .h file 
 // is in a directory which is excluded in the src_filter
 #include <ESPeasySerial.h>
 
-#ifdef USES_P094
 #include <Regexp.h>
 
 #include "../Globals/ESPEasy_time.h"
 #include "../Helpers/StringConverter.h"
 
 
-P094_data_struct::P094_data_struct() :  easySerial(nullptr) {}
+P094_data_struct::P094_data_struct() :  easySerial(nullptr) {
+  for (int i = 0; i < P094_NR_FILTERS; ++i) {
+    valueType_index[i] = P094_Filter_Value_Type::P094_not_used;
+    filter_comp[i] = P094_Filter_Comp::P094_Equal_OR;
+  }
+}
 
 P094_data_struct::~P094_data_struct() {
-  reset();
+  if (easySerial != nullptr) {
+    delete easySerial;
+    easySerial = nullptr;
+  }
 }
 
 void P094_data_struct::reset() {
@@ -77,7 +86,7 @@ void P094_data_struct::sendString(const String& data) {
       if (loglevelActiveFor(LOG_LEVEL_INFO)) {
         String log = F("Proxy: Sending: ");
         log += data;
-        addLog(LOG_LEVEL_INFO, log);
+        addLogMove(LOG_LEVEL_INFO, log);
       }
     }
   }
@@ -114,12 +123,11 @@ bool P094_data_struct::loop() {
 
           for (size_t i = 0; i < length && valid; ++i) {
             if ((sentence_part[i] > 127) || (sentence_part[i] < 32)) {
-              sentence_part = "";
+              sentence_part = String();
               ++sentences_received_error;
               valid = false;
             }
           }
-
           if (valid) {
             fullSentenceReceived = true;
           }
@@ -130,7 +138,11 @@ bool P094_data_struct::loop() {
           // Ignore LF
           break;
         default:
-          sentence_part += c;
+          if (c >= 32 && c < 127) {
+            sentence_part += c;
+          } else {
+            current_sentence_errored = true;
+          }
           break;
       }
 
@@ -151,7 +163,7 @@ const String& P094_data_struct::peekSentence() const {
 
 void P094_data_struct::getSentence(String& string, bool appendSysTime) {
   string = std::move(sentence_part);
-  sentence_part = ""; // FIXME TD-er: Should not be needed as move already cleared it.
+  sentence_part = String(); // FIXME TD-er: Should not be needed as move already cleared it.
   if (appendSysTime) {
     // Unix timestamp = 10 decimals + separator
     if (string.reserve(sentence_part.length() + 11)) {
@@ -280,21 +292,22 @@ bool P094_data_struct::parsePacket(const String& received) const {
 
     if (loglevelActiveFor(LOG_LEVEL_INFO)) {
       String log;
-      log.reserve(128);
-      log  = F("CUL Reader: ");
-      log += F(" length: ");
-      log += packet_header[P094_packet_length];
-      log += F(" (header: ");
-      log += strlength - (packet_header[P094_packet_length] * 2);
-      log += F(") manu: ");
-      log += formatToHex_decimal(packet_header[P094_manufacturer]);
-      log += F(" serial: ");
-      log += formatToHex_decimal(packet_header[P094_serial_number]);
-      log += F(" mType: ");
-      log += formatToHex_decimal(packet_header[P094_meter_type]);
-      log += F(" RSSI: ");
-      log += formatToHex_decimal(packet_header[P094_rssi]);
-      addLog(LOG_LEVEL_INFO, log);
+      if (log.reserve(128)) {
+        log  = F("CUL Reader: ");
+        log += F(" length: ");
+        log += packet_header[P094_packet_length];
+        log += F(" (header: ");
+        log += strlength - (packet_header[P094_packet_length] * 2);
+        log += F(") manu: ");
+        log += formatToHex_decimal(packet_header[P094_manufacturer]);
+        log += F(" serial: ");
+        log += formatToHex_decimal(packet_header[P094_serial_number]);
+        log += F(" mType: ");
+        log += formatToHex_decimal(packet_header[P094_meter_type]);
+        log += F(" RSSI: ");
+        log += formatToHex_decimal(packet_header[P094_rssi]);
+        addLogMove(LOG_LEVEL_INFO, log);
+      }
     }
 
     bool filter_matches[P094_NR_FILTERS];
@@ -335,29 +348,30 @@ bool P094_data_struct::parsePacket(const String& received) const {
 
             if (loglevelActiveFor(LOG_LEVEL_INFO)) {
               String log;
-              log.reserve(64);
-              log  = F("CUL Reader: ");
-              log += P094_FilterValueType_toString(valueType_index[f]);
-              log += F(":  in:");
-              log += inputString;
-              log += ' ';
-              log += P094_FilterComp_toString(comparator);
-              log += ' ';
-              log += valueString;
+              if (log.reserve(64)) {
+                log += F("CUL Reader: ");
+                log += P094_FilterValueType_toString(valueType_index[f]);
+                log += F(":  in:");
+                log += inputString;
+                log += ' ';
+                log += P094_FilterComp_toString(comparator);
+                log += ' ';
+                log += valueString;
 
-              switch (comparator) {
-                case P094_Filter_Comp::P094_Equal_OR:
-                case P094_Filter_Comp::P094_Equal_MUST:
+                switch (comparator) {
+                  case P094_Filter_Comp::P094_Equal_OR:
+                  case P094_Filter_Comp::P094_Equal_MUST:
 
-                  if (match) { log += F(" expected MATCH"); } 
-                  break;
-                case P094_Filter_Comp::P094_NotEqual_OR:
-                case P094_Filter_Comp::P094_NotEqual_MUST:
+                    if (match) { log += F(" expected MATCH"); } 
+                    break;
+                  case P094_Filter_Comp::P094_NotEqual_OR:
+                  case P094_Filter_Comp::P094_NotEqual_MUST:
 
-                  if (!match) { log += F(" expected NO MATCH"); }
-                  break;
+                    if (!match) { log += F(" expected NO MATCH"); }
+                    break;
+                }
+                addLogMove(LOG_LEVEL_INFO, log);
               }
-              addLog(LOG_LEVEL_INFO, log);
             }
 
             switch (comparator) {

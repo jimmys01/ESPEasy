@@ -1,7 +1,6 @@
 #include "../DataStructs/C013_p2p_dataStructs.h"
 
 #include "../Globals/Plugins.h"
-#include "../../ESPEasy_common.h"
 
 #ifdef USES_C013
 

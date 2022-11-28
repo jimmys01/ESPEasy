@@ -16,7 +16,7 @@
 
 #define PLUGIN_103
 #define PLUGIN_ID_103 103
-#define PLUGIN_NAME_103 "Environment - Atlas EZO pH ORP EC DO [TESTING]"
+#define PLUGIN_NAME_103 "Environment - Atlas EZO pH ORP EC DO"
 #define PLUGIN_VALUENAME1_103 "SensorData"
 #define PLUGIN_VALUENAME2_103 "Voltage"
 #define UNKNOWN 0
@@ -99,19 +99,19 @@ boolean Plugin_103(uint8_t function, struct EventStruct *event, String &string)
       String version = boardInfo.substring(boardInfo.lastIndexOf(',') + 1);
       addHtml(board);
 
-      if (board == F("pH"))
+      if (board.equals(F("pH")))
       {
         board_type = PH;
       }
-      else if (board == F("ORP"))
+      else if (board.equals(F("ORP")))
       {
         board_type = ORP;
       }
-      else if (board == F("EC"))
+      else if (board.equals(F("EC")))
       {
         board_type = EC;
       }
-      else if (board == F("D.O."))
+      else if (board.equals(F("D.O.")))
       {
         board_type = DO;
       }
@@ -127,7 +127,7 @@ boolean Plugin_103(uint8_t function, struct EventStruct *event, String &string)
 
       addHtml(F("<input type='hidden' name='plugin_214_sensorVersion' value='"));
       addHtml(version);
-      addHtml(F("'>"));
+      addHtml('\'', '>');;
     }
     else
     {
@@ -148,7 +148,9 @@ boolean Plugin_103(uint8_t function, struct EventStruct *event, String &string)
 
       addRowLabel(F("Board restart code"));
 
+      #ifndef BUILD_NO_DEBUG
       addLog(LOG_LEVEL_DEBUG, boardStatus);
+      #endif
 
       char *statuschar = strchr(statussensordata, ',');
 
@@ -187,10 +189,10 @@ boolean Plugin_103(uint8_t function, struct EventStruct *event, String &string)
 
       addRowLabel(F("Board voltage"));
       addHtml(boardStatus.substring(boardStatus.lastIndexOf(',') + 1));
-      addUnit(F("V"));
+      addUnit('V');
 
       addRowLabel(F("Sensor Data"));
-      addHtml(toString(UserVar[event->BaseVarIndex]));
+      addHtmlFloat(UserVar[event->BaseVarIndex]);
       switch (board_type)
       {
       case PH:
@@ -344,7 +346,9 @@ boolean Plugin_103(uint8_t function, struct EventStruct *event, String &string)
 
     if((board_type == EC) && isFormItemChecked(F("Plugin_103_enable_set_probe_type")))
     {
+      #ifndef BUILD_NO_DEBUG
       addLog(LOG_LEVEL_DEBUG, F("isFormItemChecked"));
+      #endif
       String probeType(F("K,"));
       probeType += webArg(F("Plugin_103_ec_probe_type"));
       char setProbeTypeCmd[ATLAS_EZO_RETURN_ARRAY_SIZE] = {0};
@@ -496,11 +500,13 @@ bool _P103_send_I2C_command(uint8_t I2Caddress, const String &cmd, char *sensord
   uint8_t i2c_response_code = 0;
   uint8_t in_char = 0;
 
+#ifndef BUILD_NO_DEBUG
   String log = F("> cmd = ");
   log += cmd;
-  addLog(LOG_LEVEL_DEBUG, log);
+  addLogMove(LOG_LEVEL_DEBUG, log);
 
-  addLog(LOG_LEVEL_DEBUG, String(cmd));
+//  addLog(LOG_LEVEL_DEBUG, String(cmd));
+#endif
   Wire.beginTransmission(I2Caddress);
   Wire.write(cmd.c_str());
   error = Wire.endTransmission();
@@ -551,30 +557,37 @@ bool _P103_send_I2C_command(uint8_t I2Caddress, const String &cmd, char *sensord
     }
     sensordata[sensor_bytes_received] = '\0';
 
-    if (loglevelActiveFor(LOG_LEVEL_DEBUG))
+    switch (i2c_response_code)
     {
-      switch (i2c_response_code)
-      {
       case 1:
       {
-        String log = F("< success, answer = ");
-        log += sensordata;
-        addLog(LOG_LEVEL_DEBUG, log);
+        #ifndef BUILD_NO_DEBUG
+        if (loglevelActiveFor(LOG_LEVEL_DEBUG)) {
+          String log = F("< success, answer = ");
+          log += sensordata;
+          addLogMove(LOG_LEVEL_DEBUG, log);
+        }
+        #endif
         break;
       }
 
       case 2:
+        #ifndef BUILD_NO_DEBUG
         addLog(LOG_LEVEL_DEBUG, F("< command failed"));
+        #endif
         return false;
 
       case 254:
+        #ifndef BUILD_NO_DEBUG
         addLog(LOG_LEVEL_DEBUG_MORE, F("< command pending"));
+        #endif
         break;
 
       case 255:
+        #ifndef BUILD_NO_DEBUG
         addLog(LOG_LEVEL_DEBUG, F("< no data"));
+        #endif
         return false;
-      }
     }
   }
 

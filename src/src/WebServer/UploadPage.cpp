@@ -1,6 +1,6 @@
 #include "../WebServer/UploadPage.h"
 
-#include "../WebServer/WebServer.h"
+#include "../WebServer/ESPEasy_WebServer.h"
 #include "../WebServer/AccessControl.h"
 #include "../WebServer/HTML_wrappers.h"
 
@@ -21,13 +21,13 @@ void handle_upload() {
   if (!isLoggedIn()) { return; }
   navMenuIndex = MENU_INDEX_TOOLS;
   TXBuffer.startStream();
-  sendHeadandTail_stdtemplate();
+  sendHeadandTail_stdtemplate(_HEAD);
 
   addHtml(F(
             "<form enctype='multipart/form-data' method='post'><p>Upload settings file:<br><input type='file' name='datafile' size='40'></p><div><input class='button link' type='submit' value='Upload'></div><input type='hidden' name='edit' value='1'></form>"));
-  sendHeadandTail_stdtemplate(true);
+  sendHeadandTail_stdtemplate(_TAIL);
   TXBuffer.endStream();
-  printWebString = "";
+  printWebString = String();
   printToWeb     = false;
 }
 
@@ -43,7 +43,7 @@ void handle_upload_post() {
 
   navMenuIndex = MENU_INDEX_TOOLS;
   TXBuffer.startStream();
-  sendHeadandTail_stdtemplate();
+  sendHeadandTail_stdtemplate(_HEAD);
 
   switch (uploadResult) {
     case uploadResult_e::Success:
@@ -62,9 +62,9 @@ void handle_upload_post() {
   }
 
   addHtml(F("Upload finished"));
-  sendHeadandTail_stdtemplate(true);
+  sendHeadandTail_stdtemplate(_TAIL);
   TXBuffer.endStream();
-  printWebString = "";
+  printWebString = String();
   printToWeb     = false;
 }
 
@@ -79,7 +79,7 @@ void handle_upload_json() {
 
   TXBuffer.startJsonStream();
   addHtml('{');
-  stream_next_json_object_value(F("status"), String(result));
+  stream_next_json_object_value(F("status"), result);
   addHtml('}');
 
   TXBuffer.endStream();
@@ -113,7 +113,7 @@ void handleFileUpload() {
     if (loglevelActiveFor(LOG_LEVEL_INFO)) {
       String log = F("Upload: START, filename: ");
       log += upload.filename;
-      addLog(LOG_LEVEL_INFO, log);
+      addLogMove(LOG_LEVEL_INFO, log);
     }
     valid        = false;
     uploadResult = uploadResult_e::UploadStarted;
@@ -123,7 +123,7 @@ void handleFileUpload() {
     // first data block, if this is the config file, check PID/Version
     if (upload.totalSize == 0)
     {
-      if (strcasecmp(upload.filename.c_str(), FILE_CONFIG) == 0)
+      if (matchFileType(upload.filename, FileType::CONFIG_DAT))
       {
         struct TempStruct {
           unsigned long PID;
@@ -167,7 +167,7 @@ void handleFileUpload() {
     if (loglevelActiveFor(LOG_LEVEL_INFO)) {
       String log = F("Upload: WRITE, Bytes: ");
       log += upload.currentSize;
-      addLog(LOG_LEVEL_INFO, log);
+      addLogMove(LOG_LEVEL_INFO, log);
     }
   }
   else if (upload.status == UPLOAD_FILE_END)
@@ -177,7 +177,7 @@ void handleFileUpload() {
     if (loglevelActiveFor(LOG_LEVEL_INFO)) {
       String log = F("Upload: END, Size: ");
       log += upload.totalSize;
-      addLog(LOG_LEVEL_INFO, log);
+      addLogMove(LOG_LEVEL_INFO, log);
     }
   }
 

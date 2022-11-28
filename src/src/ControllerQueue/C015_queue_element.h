@@ -13,7 +13,7 @@ struct EventStruct;
 
 /*********************************************************************************************\
 * C015_queue_element for queueing requests for 015: Blynk
-* Using queue_element_single_value_base
+* Using SimpleQueueElement_formatted_Strings
 \*********************************************************************************************/
 
 class C015_queue_element {
@@ -21,7 +21,11 @@ public:
 
   C015_queue_element() = default;
 
+#ifdef USE_SECOND_HEAP
+  C015_queue_element(const C015_queue_element& other) = default;
+#else
   C015_queue_element(const C015_queue_element& other) = delete;
+#endif
 
   C015_queue_element(C015_queue_element&& other);
 

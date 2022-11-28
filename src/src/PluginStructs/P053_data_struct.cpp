@@ -52,6 +52,9 @@ P053_data_struct::P053_data_struct(
   # endif // ifdef PLUGIN_053_ENABLE_EXTRA_SENSORS
   )
   : _taskIndex(TaskIndex),
+  _rxPin(rxPin),
+  _txPin(txPin),
+  _port(port),
   _sensortype(sensortype),
   # ifdef PLUGIN_053_ENABLE_EXTRA_SENSORS
   _oversample(oversample),
@@ -59,30 +62,37 @@ P053_data_struct::P053_data_struct(
   # endif // ifdef PLUGIN_053_ENABLE_EXTRA_SENSORS
   _delay_read_after_wakeup_ms(delay_read_after_wakeup_ms),
   _resetPin(resetPin), _pwrPin(pwrPin)
-{
+{}
+
+bool P053_data_struct::init() {
   # ifndef BUILD_NO_DEBUG
 
   if (loglevelActiveFor(LOG_LEVEL_DEBUG)) {
     String log;
     log.reserve(25);
     log  = F("PMSx003 : config ");
-    log += rxPin;
+    log += _rxPin;
     log += ' ';
-    log += txPin;
+    log += _txPin;
     log += ' ';
     log += _resetPin;
     log += ' ';
     log += _pwrPin;
-    addLog(LOG_LEVEL_DEBUG, log);
+    addLogMove(LOG_LEVEL_DEBUG, log);
   }
   # endif // ifndef BUILD_NO_DEBUG
 
-  if (port == ESPEasySerialPort::software) {
+  if (_port == ESPEasySerialPort::software) {
     addLog(LOG_LEVEL_INFO, F("PMSx003 : using software serial"));
   } else {
     addLog(LOG_LEVEL_INFO, F("PMSx003 : using hardware serial"));
   }
-  _easySerial = new (std::nothrow) ESPeasySerial(port, rxPin, txPin, false, 96); // 96 Bytes buffer, enough for up to 3 packets.
+  if (_easySerial != nullptr) {
+    delete _easySerial;
+    _easySerial = nullptr;
+  }
+    
+  _easySerial = new (std::nothrow) ESPeasySerial(_port, _rxPin, _txPin, false, 96); // 96 Bytes buffer, enough for up to 3 packets.
 
   if (_easySerial != nullptr) {
     _easySerial->begin(9600);
@@ -97,6 +107,7 @@ P053_data_struct::P053_data_struct(
     setActiveReadingMode();
   }
   clearReceivedData();
+  return initialized();
 }
 
 P053_data_struct::~P053_data_struct() {
@@ -114,11 +125,12 @@ bool P053_data_struct::initialized() const
 // Read 2 bytes from serial and make an uint16 of it. Additionally calculate
 // checksum for PMSx003. Assumption is that there is data available, otherwise
 // this function is blocking.
-void P053_data_struct::SerialRead16(uint16_t& value, uint16_t *checksum)
+void P053_data_struct::PacketRead16(uint16_t& value, uint16_t *checksum)
 {
   if (!initialized()) { return; }
-  const uint8_t data_high = _easySerial->read();
-  const uint8_t data_low  = _easySerial->read();
+  if (_packetPos > (PMSx003_PACKET_BUFFER_SIZE - 2)) return;
+  const uint8_t data_high = _packet[_packetPos++];
+  const uint8_t data_low  = _packet[_packetPos++];
 
   value  = data_low;
   value |= (data_high << 8);
@@ -131,14 +143,16 @@ void P053_data_struct::SerialRead16(uint16_t& value, uint16_t *checksum)
 
   # ifdef P053_LOW_LEVEL_DEBUG
 
-  // Low-level logging to see data from sensor
-  String log = F("PMSx003 : uint8_t high=0x");
-  log += String(data_high, HEX);
-  log += F(" uint8_t low=0x");
-  log += String(data_low, HEX);
-  log += F(" result=0x");
-  log += String(value, HEX);
-  addLog(LOG_LEVEL_INFO, log);
+  if (loglevelActiveFor(LOG_LEVEL_INFO)) {
+    // Low-level logging to see data from sensor
+    String log = F("PMSx003 : uint8_t high=0x");
+    log += String(data_high, HEX);
+    log += F(" uint8_t low=0x");
+    log += String(data_low, HEX);
+    log += F(" result=0x");
+    log += String(value, HEX);
+    addLogMove(LOG_LEVEL_INFO, log);
+  }
   # endif // ifdef P053_LOW_LEVEL_DEBUG
 }
 
@@ -163,23 +177,37 @@ uint8_t P053_data_struct::packetSize() const {
 
 bool P053_data_struct::packetAvailable()
 {
+  const uint8_t expectedSize = packetSize();
+  if (expectedSize == 0) return false;
   if (_easySerial != nullptr)
   {
-    // When there is enough data in the buffer, search through the buffer to
-    // find header (buffer may be out of sync)
-    if (!_easySerial->available()) { return false; }
-
-    while ((_easySerial->peek() != PMSx003_SIG1) && _easySerial->available()) {
-      _easySerial->read(); // Read until the buffer starts with the
-      // first uint8_t of a message, or buffer
-      // empty.
-    }
-
-    if (_easySerial->available() < packetSize()) {
-      return false; // Not enough yet for a complete packet
+    if (_packetPos < expectedSize) {
+      // When there is enough data in the buffer, search through the buffer to
+      // find header (buffer may be out of sync)
+      if (!_easySerial->available()) { return false; }
+      
+      if (_packetPos == 0) {
+        while ((_easySerial->peek() != PMSx003_SIG1) && _easySerial->available()) {
+          _easySerial->read(); // Read until the buffer starts with the
+          // first uint8_t of a message, or buffer
+          // empty.
+        }
+        if (_easySerial->peek() == PMSx003_SIG1) {
+          _packet[_packetPos++] = _easySerial->read();
+        }
+      }
+      if (_packetPos > 0) {
+        while (_packetPos < expectedSize) {
+          if (_easySerial->available() == 0) {
+            return false;
+          } else {
+            _packet[_packetPos++] = _easySerial->read();
+          }
+        }
+      }
     }
   }
-  return true;
+  return _packetPos >= expectedSize;
 }
 
 # ifdef PLUGIN_053_ENABLE_EXTRA_SENSORS
@@ -227,15 +255,16 @@ bool P053_data_struct::processData(struct EventStruct *event) {
   uint16_t checksum = 0, checksum2 = 0;
   uint16_t framelength   = 0;
   uint16_t packet_header = 0;
+  _packetPos = 0;
 
-  SerialRead16(packet_header, &checksum); // read PMSx003_SIG1 + PMSx003_SIG2
+  PacketRead16(packet_header, &checksum); // read PMSx003_SIG1 + PMSx003_SIG2
 
   if (packet_header != ((PMSx003_SIG1 << 8) | PMSx003_SIG2)) {
     // Not the start of the packet, stop reading.
     return false;
   }
 
-  SerialRead16(framelength, &checksum);
+  PacketRead16(framelength, &checksum);
 
   if ((framelength + 4) != packetSize()) {
     if (loglevelActiveFor(LOG_LEVEL_ERROR)) {
@@ -243,7 +272,7 @@ bool P053_data_struct::processData(struct EventStruct *event) {
       log.reserve(34);
       log  = F("PMSx003 : invalid framelength - ");
       log += framelength;
-      addLog(LOG_LEVEL_ERROR, log);
+      addLogMove(LOG_LEVEL_ERROR, log);
     }
     return false;
   }
@@ -256,8 +285,8 @@ bool P053_data_struct::processData(struct EventStruct *event) {
   }
   uint16_t data[PMS_RECEIVE_BUFFER_SIZE] = { 0 }; // uint8_t data_low, data_high;
 
-  for (uint8_t i = 0; i < frameData; i++) {
-    SerialRead16(data[i], &checksum);
+  for (uint8_t i = 0; i < frameData && i < PMS_RECEIVE_BUFFER_SIZE; i++) {
+    PacketRead16(data[i], &checksum);
   }
 
   # ifdef PLUGIN_053_ENABLE_EXTRA_SENSORS
@@ -273,20 +302,21 @@ bool P053_data_struct::processData(struct EventStruct *event) {
 
   if (loglevelActiveFor(LOG_LEVEL_DEBUG)) { // Available on all supported sensor models
     String log;
-    log.reserve(87);
-    log  = F("PMSx003 : pm1.0=");
-    log += data[PMS_PM1_0_ug_m3_factory];
-    log += F(", pm2.5=");
-    log += data[PMS_PM2_5_ug_m3_factory];
-    log += F(", pm10=");
-    log += data[PMS_PM10_0_ug_m3_factory];
-    log += F(", pm1.0a=");
-    log += data[PMS_PM1_0_ug_m3_normal];
-    log += F(", pm2.5a=");
-    log += data[PMS_PM2_5_ug_m3_normal];
-    log += F(", pm10a=");
-    log += data[PMS_PM10_0_ug_m3_normal];
-    addLog(LOG_LEVEL_DEBUG, log);
+    if (log.reserve(87)) {
+      log  = F("PMSx003 : pm1.0=");
+      log += data[PMS_PM1_0_ug_m3_factory];
+      log += F(", pm2.5=");
+      log += data[PMS_PM2_5_ug_m3_factory];
+      log += F(", pm10=");
+      log += data[PMS_PM10_0_ug_m3_factory];
+      log += F(", pm1.0a=");
+      log += data[PMS_PM1_0_ug_m3_normal];
+      log += F(", pm2.5a=");
+      log += data[PMS_PM2_5_ug_m3_normal];
+      log += F(", pm10a=");
+      log += data[PMS_PM10_0_ug_m3_normal];
+      addLogMove(LOG_LEVEL_DEBUG, log);
+    }
   }
 
   #   ifdef PLUGIN_053_ENABLE_EXTRA_SENSORS
@@ -296,20 +326,21 @@ bool P053_data_struct::processData(struct EventStruct *event) {
     // PMS2003/PMS3003 models
     // (handled as 1 model in code)
     String log;
-    log.reserve(96);
-    log  = F("PMSx003 : count/0.1L : 0.3um=");
-    log += data[PMS_cnt0_3_100ml];
-    log += F(", 0.5um=");
-    log += data[PMS_cnt0_5_100ml];
-    log += F(", 1.0um=");
-    log += data[PMS_cnt1_0_100ml];
-    log += F(", 2.5um=");
-    log += data[PMS_cnt2_5_100ml];
-    log += F(", 5.0um=");
-    log += data[PMS_cnt5_0_100ml];
-    log += F(", 10um=");
-    log += data[PMS_cnt10_0_100ml];
-    addLog(LOG_LEVEL_DEBUG, log);
+    if (log.reserve(96)) {
+      log  = F("PMSx003 : count/0.1L : 0.3um=");
+      log += data[PMS_cnt0_3_100ml];
+      log += F(", 0.5um=");
+      log += data[PMS_cnt0_5_100ml];
+      log += F(", 1.0um=");
+      log += data[PMS_cnt1_0_100ml];
+      log += F(", 2.5um=");
+      log += data[PMS_cnt2_5_100ml];
+      log += F(", 5.0um=");
+      log += data[PMS_cnt5_0_100ml];
+      log += F(", 10um=");
+      log += data[PMS_cnt10_0_100ml];
+      addLogMove(LOG_LEVEL_DEBUG, log);
+    }
   }
 
 
@@ -317,24 +348,25 @@ bool P053_data_struct::processData(struct EventStruct *event) {
       && ((GET_PLUGIN_053_SENSOR_MODEL_SELECTOR == PMSx003_type::PMS5003_ST)
           || (GET_PLUGIN_053_SENSOR_MODEL_SELECTOR == PMSx003_type::PMS5003_T))) { // Values only available on PMS5003ST & PMS5003T
     String log;
-    log.reserve(45);
-    log  = F("PMSx003 : temp=");
-    log += static_cast<float>(data[PMS_Temp_C]) / 10.0f;
-    log += F(", humi=");
-    log += static_cast<float>(data[PMS_Hum_pct]) / 10.0f;
+    if (log.reserve(45)) {
+      log  = F("PMSx003 : temp=");
+      log += static_cast<float>(data[PMS_Temp_C]) / 10.0f;
+      log += F(", humi=");
+      log += static_cast<float>(data[PMS_Hum_pct]) / 10.0f;
 
-    if (GET_PLUGIN_053_SENSOR_MODEL_SELECTOR == PMSx003_type::PMS5003_ST) {
-      log += F(", hcho=");
-      log += static_cast<float>(data[PMS_Formaldehyde_mg_m3]) / 1000.0f;
+      if (GET_PLUGIN_053_SENSOR_MODEL_SELECTOR == PMSx003_type::PMS5003_ST) {
+        log += F(", hcho=");
+        log += static_cast<float>(data[PMS_Formaldehyde_mg_m3]) / 1000.0f;
+      }
+      addLogMove(LOG_LEVEL_DEBUG, log);
     }
-    addLog(LOG_LEVEL_DEBUG, log);
   }
   #   endif // ifdef PLUGIN_053_ENABLE_EXTRA_SENSORS
   #  endif     // ifdef P053_LOW_LEVEL_DEBUG
   # endif      // ifndef BUILD_NO_DEBUG
 
   // Compare checksums
-  SerialRead16(checksum2, nullptr);
+  PacketRead16(checksum2, nullptr);
   SerialFlush(); // Make sure no data is lost due to full buffer.
 
   if (checksum != checksum2) {
@@ -344,10 +376,13 @@ bool P053_data_struct::processData(struct EventStruct *event) {
 
   if (_last_wakeup_moment.isSet() && !_last_wakeup_moment.timeReached()) {
     if (loglevelActiveFor(LOG_LEVEL_INFO)) {
-      String log = F("PMSx003 : Less than ");
-      log += _delay_read_after_wakeup_ms / 1000ul;
-      log += F(" sec since sensor wakeup => Ignoring sample");
-      addLog(LOG_LEVEL_INFO, log);
+      String log;
+      if (log.reserve(80)) {
+        log = F("PMSx003 : Less than ");
+        log += _delay_read_after_wakeup_ms / 1000ul;
+        log += F(" sec since sensor wakeup => Ignoring sample");
+        addLogMove(LOG_LEVEL_INFO, log);
+      }
     }
     return false;
   }
@@ -485,7 +520,7 @@ bool P053_data_struct::checkAndClearValuesReceived(struct EventStruct *event) {
       String log = F("PMSx003: Oversampling using ");
       log += _values_received;
       log += F(" samples");
-      addLog(LOG_LEVEL_INFO, log);
+      addLogMove(LOG_LEVEL_INFO, log);
     }
   }
   # endif // ifdef PLUGIN_053_ENABLE_EXTRA_SENSORS
@@ -656,6 +691,11 @@ void P053_data_struct::clearReceivedData() {
   }
   # endif // ifdef PLUGIN_053_ENABLE_EXTRA_SENSORS
   _values_received = 0;
+}
+
+void P053_data_struct::clearPacket() {
+  _packetPos = 0;
+  ZERO_FILL(_packet);
 }
 
 const __FlashStringHelper * P053_data_struct::getEventString(uint8_t index) {

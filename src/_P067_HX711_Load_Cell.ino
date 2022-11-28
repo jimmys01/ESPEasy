@@ -19,7 +19,7 @@
 
 #define PLUGIN_067
 #define PLUGIN_ID_067           67
-#define PLUGIN_NAME_067         "Weight - HX711 Load Cell [TESTING]"
+#define PLUGIN_NAME_067         "Weight - HX711 Load Cell"
 #define PLUGIN_VALUENAME1_067   "WeightChanA"
 #define PLUGIN_VALUENAME2_067   "WeightChanB"
 
@@ -160,6 +160,7 @@ boolean Plugin_067(uint8_t function, struct EventStruct *event, String& string)
         Device[deviceCount].TimerOption = true;
         Device[deviceCount].TimerOptional = false;
         Device[deviceCount].GlobalSyncOption = true;
+        Device[deviceCount].PluginStats        = true;
         break;
       }
 
@@ -178,8 +179,8 @@ boolean Plugin_067(uint8_t function, struct EventStruct *event, String& string)
 
     case PLUGIN_GET_DEVICEGPIONAMES:
       {
-        event->String1 = formatGpioName_output("SCL");
-        event->String2 = formatGpioName_input("DOUT");
+        event->String1 = formatGpioName_output(F("SCL"));
+        event->String2 = formatGpioName_input(F("DOUT"));
         break;
       }
 
@@ -193,7 +194,7 @@ boolean Plugin_067(uint8_t function, struct EventStruct *event, String& string)
 
         {
           const __FlashStringHelper * optionsModeChanA[3] = { F("off"), F("Gain 64"), F("Gain 128") };
-          addFormSelector(F("Mode"), F("modeChanA"), 3, optionsModeChanA, NULL, (PCONFIG(0) >> BIT_POS_MODE_CHAN_A64) & 0x03);
+          addFormSelector(F("Mode"), F("modeChanA"), 3, optionsModeChanA, nullptr, (PCONFIG(0) >> BIT_POS_MODE_CHAN_A64) & 0x03);
         }
 
         int2float(PCONFIG(1), PCONFIG(2), &valFloat);
@@ -208,7 +209,7 @@ boolean Plugin_067(uint8_t function, struct EventStruct *event, String& string)
 
         {
           const __FlashStringHelper * optionsModeChanB[2] = { F("off"), F("Gain 32") };
-          addFormSelector(F("Mode"), F("modeChanB"), 2, optionsModeChanB, NULL, (PCONFIG(0) >> BIT_POS_MODE_CHAN_B32) & 0x01);
+          addFormSelector(F("Mode"), F("modeChanB"), 2, optionsModeChanB, nullptr, (PCONFIG(0) >> BIT_POS_MODE_CHAN_B32) & 0x01);
         }
 
         int2float(PCONFIG(3), PCONFIG(4), &valFloat);
@@ -311,11 +312,13 @@ boolean Plugin_067(uint8_t function, struct EventStruct *event, String& string)
         int16_t pinSCL = CONFIG_PIN1;
         int16_t pinDOUT = CONFIG_PIN2;
 
-        String log = F("HX711: GPIO: SCL=");
-        log += pinSCL;
-        log += F(" DOUT=");
-        log += pinDOUT;
-        addLog(LOG_LEVEL_INFO, log);
+        if (loglevelActiveFor(LOG_LEVEL_INFO)) {
+          String log = F("HX711: GPIO: SCL=");
+          log += pinSCL;
+          log += F(" DOUT=");
+          log += pinDOUT;
+          addLogMove(LOG_LEVEL_INFO, log);
+        }
 
         if (pinSCL >= 0 && pinDOUT >= 0)
         {
@@ -377,7 +380,6 @@ boolean Plugin_067(uint8_t function, struct EventStruct *event, String& string)
 
     case PLUGIN_READ:
       {
-        String log;
         int8_t modeChanA = (PCONFIG(0) >> 2) & 0x03;
         int8_t modeChanB = (PCONFIG(0) >> 4) & 0x01;
         float valFloat;
@@ -390,7 +392,7 @@ boolean Plugin_067(uint8_t function, struct EventStruct *event, String& string)
         // Channel A activated?
         if (modeChanA != modeAoff)
         {
-          log = F("HX711: ChanA: ");
+          String log = F("HX711: ChanA: ");
 
           if (Plugin_067_OversamplingCountChanA[event->TaskIndex] > 0)
           {
@@ -424,13 +426,13 @@ boolean Plugin_067(uint8_t function, struct EventStruct *event, String& string)
           {
             log += F("NO NEW VALUE");
           }
-          addLog(LOG_LEVEL_INFO,log);
+          addLogMove(LOG_LEVEL_INFO, log);
         }
 
         // Channel B activated?
         if (modeChanB != modeBoff)
         {
-          log = F("HX711: ChanB: ");
+          String log = F("HX711: ChanB: ");
 
           if (Plugin_067_OversamplingCountChanB[event->TaskIndex] > 0)
           {
@@ -464,7 +466,7 @@ boolean Plugin_067(uint8_t function, struct EventStruct *event, String& string)
           {
             log += F("NO NEW VALUE");
           }
-          addLog(LOG_LEVEL_INFO,log);
+          addLogMove(LOG_LEVEL_INFO, log);
         }
 
         success = true;

@@ -54,7 +54,7 @@
 
 #define PLUGIN_055
 #define PLUGIN_ID_055         55
-#define PLUGIN_NAME_055       "Notify - Chiming [TESTING]"
+#define PLUGIN_NAME_055       "Notify - Chiming"
 
 #define PLUGIN_055_FIFO_SIZE 64   // must be power of 2
 #define PLUGIN_055_FIFO_MASK (PLUGIN_055_FIFO_SIZE-1)
@@ -196,7 +196,7 @@ boolean Plugin_055(uint8_t function, struct EventStruct *event, String& string)
           }
           if (Plugin_055_Data->lowActive)
             log += F("!");
-          addLog(LOG_LEVEL_INFO, log);
+          addLogMove(LOG_LEVEL_INFO, log);
           success = true;
         }
 
@@ -219,7 +219,7 @@ boolean Plugin_055(uint8_t function, struct EventStruct *event, String& string)
 
         String command = parseString(string, 1);
 
-        if (command == F("chime"))
+        if (command.equals(F("chime")))
         {
           String param = parseStringToEndKeepCase(string, 2);
           if (param.length() > 0) {
@@ -227,7 +227,7 @@ boolean Plugin_055(uint8_t function, struct EventStruct *event, String& string)
           }
           success = true;
         }
-        if (command == F("chimeplay"))
+        if (command.equals(F("chimeplay")))
         {
           String name = parseString(string, 2);
           if (name.length() > 0) {
@@ -237,7 +237,7 @@ boolean Plugin_055(uint8_t function, struct EventStruct *event, String& string)
           }
           success = true;
         }
-        if (command == F("chimesave"))
+        if (command.equals(F("chimesave")))
         {
           String name = parseString(string, 2);
           String param = parseStringToEndKeepCase(string, 3);
@@ -316,11 +316,14 @@ boolean Plugin_055(uint8_t function, struct EventStruct *event, String& string)
           if (! Plugin_055_IsEmptyFIFO())
           {
             char c = Plugin_055_ReadFIFO();
-
-            String log = F("Chime: Process '");
-            log += c;
-            log += '\'';
-            addLog(LOG_LEVEL_DEBUG, log);
+            # ifndef BUILD_NO_DEBUG
+            if (loglevelActiveFor(LOG_LEVEL_DEBUG)) {
+              String log = F("Chime: Process '");
+              log += c;
+              log += '\'';
+              addLogMove(LOG_LEVEL_DEBUG, log);
+            }
+            #endif
 
             switch (c)
             {
@@ -477,7 +480,7 @@ void Plugin_055_WriteChime(const String& name, const String& tokens)
     log += tokens;
   }
 
-  addLog(LOG_LEVEL_INFO, log);
+  addLogMove(LOG_LEVEL_INFO, log);
 }
 
 uint8_t Plugin_055_ReadChime(const String& name, String& tokens)
@@ -490,7 +493,7 @@ uint8_t Plugin_055_ReadChime(const String& name, String& tokens)
   log += fileName;
   log += ' ';
 
-  tokens = "";
+  tokens = String();
   fs::File f = tryOpenFile(fileName, "r");
   if (f)
   {
@@ -506,7 +509,7 @@ uint8_t Plugin_055_ReadChime(const String& name, String& tokens)
     log += tokens;
   }
 
-  addLog(LOG_LEVEL_INFO, log);
+  addLogMove(LOG_LEVEL_INFO, log);
 
   return tokens.length();
 }

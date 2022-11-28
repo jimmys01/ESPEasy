@@ -13,7 +13,7 @@
 
 #define PLUGIN_083
 #define PLUGIN_ID_083        83
-#define PLUGIN_NAME_083       "Gasses - SGP30 [TESTING]"
+#define PLUGIN_NAME_083       "Gasses - SGP30"
 #define PLUGIN_VALUENAME1_083 "TVOC"
 #define PLUGIN_VALUENAME2_083 "eCO2"
 
@@ -43,6 +43,7 @@ boolean Plugin_083(uint8_t function, struct EventStruct *event, String& string)
       Device[deviceCount].SendDataOption     = true;
       Device[deviceCount].TimerOption        = true;
       Device[deviceCount].GlobalSyncOption   = true;
+      Device[deviceCount].PluginStats        = true;
       break;
     }
 
@@ -163,10 +164,10 @@ boolean Plugin_083(uint8_t function, struct EventStruct *event, String& string)
             if (loglevelActiveFor(LOG_LEVEL_INFO)) {
               String log = F("SGP30: TVOC: ");
               log += UserVar[P083_TVOC];
-              addLog(LOG_LEVEL_INFO, log);
+              addLogMove(LOG_LEVEL_INFO, log);
               log  = F("SGP30: eCO2: ");
               log += UserVar[P083_ECO2];
-              addLog(LOG_LEVEL_INFO, log);
+              addLogMove(LOG_LEVEL_INFO, log);
             }
             success = true;
             break;

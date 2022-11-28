@@ -54,7 +54,7 @@
 
 #define PLUGIN_054
 #define PLUGIN_ID_054         54
-#define PLUGIN_NAME_054       "Communication - DMX512 TX [TESTING]"
+#define PLUGIN_NAME_054       "Communication - DMX512 TX"
 
 uint8_t* Plugin_054_DMXBuffer = 0;
 int16_t Plugin_054_DMXSize = 32;
@@ -150,7 +150,7 @@ boolean Plugin_054(uint8_t function, struct EventStruct *event, String& string)
         lowerString.toLowerCase();
         String command = parseString(lowerString, 1);
 
-        if (command == F("dmx"))
+        if (command.equals(F("dmx")))
         {
           String param;
           String paramKey;
@@ -168,9 +168,11 @@ boolean Plugin_054(uint8_t function, struct EventStruct *event, String& string)
           {
             while (param.length())
             {
+              #ifndef BUILD_NO_DEBUG
               addLog(LOG_LEVEL_DEBUG_MORE, param);
+              #endif
 
-              if (param == F("log"))
+              if (param.equals(F("log")))
               {
                 if (loglevelActiveFor(LOG_LEVEL_INFO)) {
                   String log = F("DMX  : ");
@@ -179,12 +181,12 @@ boolean Plugin_054(uint8_t function, struct EventStruct *event, String& string)
                     log += Plugin_054_DMXBuffer[i];
                     log += F(", ");
                   }
-                  addLog(LOG_LEVEL_INFO, log);
+                  addLogMove(LOG_LEVEL_INFO, log);
                 }
                 success = true;
               }
 
-              else if (param == F("test"))
+              else if (param.equals(F("test")))
               {
                 for (int16_t i = 0; i < Plugin_054_DMXSize; i++)
                   //Plugin_054_DMXBuffer[i] = i+1;
@@ -192,13 +194,13 @@ boolean Plugin_054(uint8_t function, struct EventStruct *event, String& string)
                 success = true;
               }
 
-              else if (param == F("on"))
+              else if (param.equals(F("on")))
               {
                 memset(Plugin_054_DMXBuffer, 255, Plugin_054_DMXSize);
                 success = true;
               }
 
-              else if (param == F("off"))
+              else if (param.equals(F("off")))
               {
                 memset(Plugin_054_DMXBuffer, 0, Plugin_054_DMXSize);
                 success = true;

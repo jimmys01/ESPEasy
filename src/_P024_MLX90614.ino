@@ -35,6 +35,7 @@ boolean Plugin_024(uint8_t function, struct EventStruct *event, String& string)
       Device[deviceCount].ValueCount         = 1;
       Device[deviceCount].TimerOption        = true;
       Device[deviceCount].GlobalSyncOption   = true;
+      Device[deviceCount].PluginStats        = true;
       break;
     }
 
@@ -61,12 +62,14 @@ boolean Plugin_024(uint8_t function, struct EventStruct *event, String& string)
         #define MLX90614_OPTION 2
 
       uint8_t choice = PCONFIG(0);
-      const __FlashStringHelper * options[MLX90614_OPTION];
-      int optionValues[MLX90614_OPTION];
-      optionValues[0] = (0x07);
-      options[0]      = F("IR object temperature");
-      optionValues[1] = (0x06);
-      options[1]      = F("Ambient temperature");
+      const __FlashStringHelper * options[MLX90614_OPTION] = {
+        F("IR object temperature"),
+        F("Ambient temperature")
+      };
+      const int optionValues[MLX90614_OPTION] = {
+        (0x07),
+        (0x06)
+      };
       addFormSelector(F("Option"), F("p024_option"), MLX90614_OPTION, options, optionValues, choice);
 
       success = true;
@@ -110,7 +113,7 @@ boolean Plugin_024(uint8_t function, struct EventStruct *event, String& string)
         if (loglevelActiveFor(LOG_LEVEL_INFO)) {
           String log = F("MLX90614  : Temperature: ");
           log += formatUserVarNoCheck(event->TaskIndex, 0);
-          addLog(LOG_LEVEL_INFO, log);
+          addLogMove(LOG_LEVEL_INFO, log);
         }
         //        send(msgObjTemp024->set(UserVar[event->BaseVarIndex], 1)); // Mysensors
         success = true;

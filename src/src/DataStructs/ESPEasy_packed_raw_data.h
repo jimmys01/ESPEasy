@@ -1,7 +1,9 @@
-#ifndef ESPEASY_PACKED_RAW_DATA_H
-#define ESPEASY_PACKED_RAW_DATA_H
+#ifndef DATASTRUCT_ESPEASY_PACKED_RAW_DATA_H
+#define DATASTRUCT_ESPEASY_PACKED_RAW_DATA_H
 
 #include "../../ESPEasy_common.h"
+
+#if FEATURE_PACKED_RAW_DATA
 
 // Data types used in packed encoder.
 // p_uint16_1e2 means it is a 16 bit unsigned int, but multiplied by 100 first.
@@ -79,5 +81,5 @@ String LoRa_addInt(uint64_t value, PackedData_enum datatype);
 
 String LoRa_addFloat(float value, PackedData_enum datatype);
 
-
-#endif // ESPEASY_PACKED_RAW_DATA_H
+#endif
+#endif // DATASTRUCT_ESPEASY_PACKED_RAW_DATA_H

@@ -23,7 +23,7 @@
 
 # define PLUGIN_062
 # define PLUGIN_ID_062         62
-# define PLUGIN_NAME_062       "Keypad - MPR121 Touch [TESTING]"
+# define PLUGIN_NAME_062       "Keypad - MPR121 Touch"
 # define PLUGIN_VALUENAME1_062 "ScanCode"
 
 
@@ -177,10 +177,8 @@ boolean Plugin_062(uint8_t function, struct EventStruct *event, String& string)
         html_end_table();
 
         if (canCalibrate) {
-          const __FlashStringHelper *options1[2] = { F("No"), F("Yes") };
-          int optionValues1[2]                   = { 0, 1 };
-          int choice1                            = tbUseCalibration ? 1 : 0;
-          addFormSelector(F("Enable Calibration"), F("p062_use_calibration"), 2, options1, optionValues1, choice1, true);
+          const int choice1 = tbUseCalibration ? 1 : 0;
+          addFormSelector_YesNo(F("Enable Calibration"), F("p062_use_calibration"), choice1, true);
 
           if (tbUseCalibration) {
             addFormCheckBox(F("Clear calibrationdata"), F("p062_clear_calibrate"), false);
@@ -226,9 +224,11 @@ boolean Plugin_062(uint8_t function, struct EventStruct *event, String& string)
           P062_data->StoredSettings.TouchObjects[objectNr].release = getFormItemInt(getPluginCustomArgName(objectNr + 200));
         }
         # ifdef PLUGIN_062_DEBUG
-        String log = F("p062_data save size: ");
-        log += sizeof(P062_data->StoredSettings);
-        addLog(LOG_LEVEL_INFO, log);
+        if (loglevelActiveFor(LOG_LEVEL_INFO)) {
+          String log = F("p062_data save size: ");
+          log += sizeof(P062_data->StoredSettings);
+          addLogMove(LOG_LEVEL_INFO, log);
+        }
         # endif // PLUGIN_062_DEBUG
         SaveCustomTaskSettings(event->TaskIndex, reinterpret_cast<const uint8_t *>(&(P062_data->StoredSettings)),
                                sizeof(P062_data->StoredSettings));
@@ -319,7 +319,7 @@ boolean Plugin_062(uint8_t function, struct EventStruct *event, String& string)
               log = F("KeyMap=0x");
             }
             log += String(key, 16);
-            addLog(LOG_LEVEL_INFO, log);
+            addLogMove(LOG_LEVEL_INFO, log);
 
             bool tbUseCalibration = bitRead(P062_CONFIG_FLAGS, P062_FLAGS_USE_CALIBRATION);
 
@@ -343,7 +343,7 @@ boolean Plugin_062(uint8_t function, struct EventStruct *event, String& string)
                   log += min;
                   log += F(" max: ");
                   log += max;
-                  addLog(LOG_LEVEL_INFO, log);
+                  addLogMove(LOG_LEVEL_INFO, log);
 
                   if (!PCONFIG(1)) {
                     break;

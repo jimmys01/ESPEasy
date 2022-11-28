@@ -1,14 +1,14 @@
-#ifndef ESPEASY_EVENTSTRUCT_H
-#define ESPEASY_EVENTSTRUCT_H
+#ifndef DATASTRUCTS_ESPEASY_EVENTSTRUCT_H
+#define DATASTRUCTS_ESPEASY_EVENTSTRUCT_H
+
+#include "../../ESPEasy_common.h"
 
 #include <Arduino.h>
 
 #include "../DataTypes/ControllerIndex.h"
 #include "../DataTypes/EventValueSource.h"
 #include "../DataTypes/TaskIndex.h"
-//#include "../Globals/CPlugins.h"
-#include "../Globals/NPlugins.h"
-//#include "../Globals/Plugins.h"
+#include "../DataTypes/NotifierIndex.h"
 #include "../DataStructs/DeviceStruct.h"
 
 
@@ -19,7 +19,7 @@
 \*********************************************************************************************/
 struct EventStruct
 {
-  EventStruct();
+  EventStruct() = default;
   // Delete the copy constructor
   EventStruct(const struct EventStruct& event) = delete;
 private:
@@ -42,6 +42,8 @@ public:
 
   void setTaskIndex(taskIndex_t taskIndex);
 
+  void clear();
+
   // Check (and update) sensorType if not set, plus return (corrected) sensorType
   Sensor_VType getSensorType();
 
@@ -62,10 +64,12 @@ public:
   EventValueSource::Enum Source            = EventValueSource::Enum::VALUE_SOURCE_NOT_SET;
   taskIndex_t            TaskIndex         = INVALID_TASK_INDEX;       // index position in TaskSettings array, 0-11
   controllerIndex_t      ControllerIndex   = INVALID_CONTROLLER_INDEX; // index position in Settings.Controller, 0-3
+#if FEATURE_NOTIFIER
   notifierIndex_t        NotificationIndex = INVALID_NOTIFIER_INDEX;   // index position in Settings.Notification, 0-3
+#endif
   uint8_t                BaseVarIndex      = 0;
   Sensor_VType           sensorType        = Sensor_VType::SENSOR_TYPE_NOT_SET;
   uint8_t                OriginTaskIndex   = 0;
 };
 
-#endif // ESPEASY_EVENTSTRUCT_H
+#endif // DATASTRUCTS_ESPEASY_EVENTSTRUCT_H

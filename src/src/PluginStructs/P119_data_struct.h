@@ -5,7 +5,7 @@
 
 #ifdef USES_P119
 
-# define PLUGIN_119_DEBUG  false // set to true for extra log info in the debug
+// # define PLUGIN_119_DEBUG  // set to true for extra log info in the debug
 
 # include <vector>
 # include "ITG3205.h"
@@ -19,7 +19,7 @@ public:
 
   P119_data_struct() = delete;
 
-  ~P119_data_struct();
+  virtual ~P119_data_struct();
 
   bool read_sensor();
 

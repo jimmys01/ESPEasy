@@ -1,6 +1,6 @@
 #include "../WebServer/WiFiScanner.h"
 
-#include "../WebServer/WebServer.h"
+#include "../WebServer/ESPEasy_WebServer.h"
 #include "../WebServer/AccessControl.h"
 #include "../WebServer/HTML_wrappers.h"
 
@@ -8,6 +8,9 @@
 #include "../Globals/WiFi_AP_Candidates.h"
 #include "../Helpers/StringGenerator_WiFi.h"
 
+#ifdef USES_ESPEASY_NOW
+#include "../Globals/ESPEasy_now_handler.h"
+#endif
 
 #ifdef WEBSERVER_NEW_UI
 
@@ -22,7 +25,7 @@ void handle_wifiscanner_json() {
   if (!isLoggedIn()) { return; }
   navMenuIndex = MENU_INDEX_TOOLS;
   TXBuffer.startJsonStream();
-  addHtml(F("[{"));
+  addHtml('[', '{');
   bool firstentry = true;
 
   if (WiFi_AP_Candidates.scanComplete() <= 0) {
@@ -34,15 +37,15 @@ void handle_wifiscanner_json() {
   for (auto it = WiFi_AP_Candidates.scanned_begin(); it != WiFi_AP_Candidates.scanned_end(); ++it)
   {
     if (firstentry) { firstentry = false; }
-    else { addHtml(F(",{")); }
+    else { addHtml(',', '{'); }
     const String authType = it->encryption_type();
     if (authType.length() > 0) {
       stream_next_json_object_value(F("auth"), authType);
     }
     stream_next_json_object_value(getLabel(LabelType::SSID),      it->ssid);
     stream_next_json_object_value(getLabel(LabelType::BSSID),     it->bssid.toString());
-    stream_next_json_object_value(getLabel(LabelType::CHANNEL),   String(it->channel));
-    stream_last_json_object_value(getLabel(LabelType::WIFI_RSSI), String(it->rssi));
+    stream_next_json_object_value(getLabel(LabelType::CHANNEL),   it->channel);
+    stream_last_json_object_value(getLabel(LabelType::WIFI_RSSI), it->rssi);
   }
   if (firstentry) {
     addHtml('}');
@@ -88,6 +91,9 @@ void handle_wifiscanner() {
       addHtml(it->toString(F("<TD>")));
       html_TD();
       getWiFi_RSSI_icon(it->rssi, 45);
+      #ifdef USES_ESPEASY_NOW
+        ESPEasy_now_handler.addPeerFromWiFiScan(*it);
+      #endif
     }
   }
 

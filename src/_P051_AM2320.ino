@@ -17,7 +17,7 @@
 
 #define PLUGIN_051
 #define PLUGIN_ID_051        51
-#define PLUGIN_NAME_051       "Environment - AM2320 [TESTING]"
+#define PLUGIN_NAME_051       "Environment - AM2320"
 #define PLUGIN_VALUENAME1_051 "Temperature"
 #define PLUGIN_VALUENAME2_051 "Humidity"
 
@@ -41,6 +41,7 @@ boolean Plugin_051(uint8_t function, struct EventStruct *event, String& string)
       Device[deviceCount].SendDataOption     = true;
       Device[deviceCount].TimerOption        = true;
       Device[deviceCount].GlobalSyncOption   = true;
+      Device[deviceCount].PluginStats        = true;
       break;
     }
 
@@ -100,10 +101,10 @@ boolean Plugin_051(uint8_t function, struct EventStruct *event, String& string)
           if (loglevelActiveFor(LOG_LEVEL_INFO)) {
             String log = F("AM2320: Temperature: ");
             log += formatUserVarNoCheck(event->TaskIndex, 0);
-            addLog(LOG_LEVEL_INFO, log);
+            addLogMove(LOG_LEVEL_INFO, log);
             log  = F("AM2320: Humidity: ");
             log += formatUserVarNoCheck(event->TaskIndex, 1);
-            addLog(LOG_LEVEL_INFO, log);
+            addLogMove(LOG_LEVEL_INFO, log);
           }
           success = true;
           break;

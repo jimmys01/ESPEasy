@@ -46,6 +46,7 @@ boolean Plugin_106(uint8_t function, struct EventStruct *event, String& string)
       Device[deviceCount].SendDataOption     = true;
       Device[deviceCount].TimerOption        = true;
       Device[deviceCount].GlobalSyncOption   = true;
+      Device[deviceCount].PluginStats        = true;
       break;
     }
 
@@ -80,7 +81,7 @@ boolean Plugin_106(uint8_t function, struct EventStruct *event, String& string)
     case PLUGIN_WEBFORM_LOAD:
     {
       addFormNumericBox(F("Altitude"), F("plugin_106_BME680_elev"), PCONFIG(1));
-      addUnit(F("m"));
+      addUnit('m');
 
       success = true;
       break;

@@ -1,5 +1,7 @@
 #include "../Helpers/_CPlugin_Helper_webform.h"
 
+#include "../../ESPEasy_common.h"
+
 #include "../DataStructs/ESPEasy_EventStruct.h"
 #include "../DataTypes/ESPEasy_plugin_functions.h"
 #include "../Globals/CPlugins.h"
@@ -7,7 +9,7 @@
 #include "../Globals/Settings.h"
 #include "../Helpers/_CPlugin_Helper.h"
 #include "../Helpers/Networking.h"
-#include "../WebServer/WebServer.h"
+#include "../WebServer/ESPEasy_WebServer.h"
 #include "../WebServer/Markup.h"
 #include "../WebServer/Markup_Forms.h"
 
@@ -131,10 +133,11 @@ void addControllerParameterForm(const ControllerSettingsStruct& ControllerSettin
     case ControllerSettingsStruct::CONTROLLER_USE_DNS:
     {
       uint8_t   choice = ControllerSettings.UseDNS;
-      const __FlashStringHelper * options[2];
-      options[0] = F("Use IP address");
-      options[1] = F("Use Hostname");
-      addFormSelector(displayName, internalName, 2, options, NULL, NULL, choice, true);
+      const __FlashStringHelper * options[2] = {
+        F("Use IP address"),
+        F("Use Hostname")
+      };
+      addFormSelector(displayName, internalName, 2, options, nullptr, nullptr, choice, true);
       break;
     }
     case ControllerSettingsStruct::CONTROLLER_HOSTNAME:
@@ -195,10 +198,11 @@ void addControllerParameterForm(const ControllerSettingsStruct& ControllerSettin
     }
     case ControllerSettingsStruct::CONTROLLER_FULL_QUEUE_ACTION:
     {
-      const __FlashStringHelper * options[2];
-      options[0] = F("Ignore New");
-      options[1] = F("Delete Oldest");
-      addFormSelector(displayName, internalName, 2, options, NULL, NULL, ControllerSettings.DeleteOldest, false);
+      const __FlashStringHelper * options[2] {
+        F("Ignore New"),
+        F("Delete Oldest")
+      };
+      addFormSelector(displayName, internalName, 2, options, nullptr, nullptr, ControllerSettings.DeleteOldest, false);
       break;
     }
     case ControllerSettingsStruct::CONTROLLER_ALLOW_EXPIRE:
@@ -212,10 +216,11 @@ void addControllerParameterForm(const ControllerSettingsStruct& ControllerSettin
       break;      
     case ControllerSettingsStruct::CONTROLLER_CHECK_REPLY:
     {
-      const __FlashStringHelper * options[2];
-      options[0] = F("Ignore Acknowledgement");
-      options[1] = F("Check Acknowledgement");
-      addFormSelector(displayName, internalName, 2, options, NULL, NULL, ControllerSettings.MustCheckReply, false);
+      const __FlashStringHelper * options[2] = {
+        F("Ignore Acknowledgement"),
+        F("Check Acknowledgement")
+      };
+      addFormSelector(displayName, internalName, 2, options, nullptr, nullptr, ControllerSettings.MustCheckReply, false);
       break;
     }
     case ControllerSettingsStruct::CONTROLLER_CLIENT_ID:

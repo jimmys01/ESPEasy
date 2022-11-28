@@ -11,19 +11,20 @@
 #define HTML_SYMBOL_I_O     "&#8660;"
 
 
-enum gpio_direction {
+enum class gpio_direction : uint8_t {
   gpio_input,
   gpio_output,
   gpio_bidirectional
 };
 
-enum class PinSelectPurpose {
+enum class PinSelectPurpose : uint8_t {
   Generic,
   Generic_input,
   Generic_output,
   Generic_bidir,
   I2C,
   SPI,
+  SPI_MISO,
   Ethernet
 
 };
@@ -37,19 +38,16 @@ const __FlashStringHelper * formatGpioDirection(gpio_direction direction);
 String formatGpioLabel(int  gpio,
                        bool includeWarning);
 
-String formatGpioName(const String & label,
+String formatGpioName(const __FlashStringHelper * label,
                       gpio_direction direction,
-                      bool           optional);
+                      bool           optional = false);
 
-String formatGpioName(const String & label,
-                      gpio_direction direction);
+String formatGpioName_input(const __FlashStringHelper * label);
+String formatGpioName_output(const __FlashStringHelper * label);
+String formatGpioName_bidirectional(const __FlashStringHelper * label);
+String formatGpioName_input_optional(const __FlashStringHelper * label);
 
-String formatGpioName_input(const String& label);
-String formatGpioName_output(const String& label);
-String formatGpioName_bidirectional(const String& label);
-String formatGpioName_input_optional(const String& label);
-
-String formatGpioName_output_optional(const String& label);
+String formatGpioName_output_optional(const __FlashStringHelper * label);
 
 // RX/TX are the only signals which are crossed, so they must be labelled like this:
 // "GPIO <-- TX" and "GPIO --> RX"

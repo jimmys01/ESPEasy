@@ -1,6 +1,8 @@
 #ifndef HELPERS_STRINGCONVERTER_H
 #define HELPERS_STRINGCONVERTER_H
 
+#include "../../ESPEasy_common.h"
+
 #include <Arduino.h>
 
 #include "../Globals/Plugins.h"
@@ -11,6 +13,25 @@
 class IPAddress;
 
 // -V::569
+
+/********************************************************************************************\
+   Concatenate using code which results in the smallest compiled code
+ \*********************************************************************************************/
+
+template <typename T>
+String concat(const __FlashStringHelper * str, const T &val) {
+  String res(str);
+  res.concat(val);
+  return res;
+}
+
+template <typename T>
+String concat(const String& str, const T &val) {
+  String res(str);
+  res.concat(val);
+  return res;
+}
+
 
 /********************************************************************************************\
    Convert a char string to integer
@@ -71,9 +92,15 @@ unsigned long long hexToULL(const String& input_c,
                             size_t        nrHexDecimals);
 
 String formatToHex(unsigned long value,
+                   const __FlashStringHelper * prefix,
+                   unsigned int minimal_hex_digits);
+
+String formatToHex(unsigned long value,
                    const __FlashStringHelper * prefix);
 
-String formatToHex(unsigned long value);
+String formatToHex(unsigned long value, unsigned int minimal_hex_digits = 0);
+
+String formatToHex_no_prefix(unsigned long value, unsigned int minimal_hex_digits = 0);
 
 String formatHumanReadable(unsigned long value,
                            unsigned long factor);
@@ -96,7 +123,7 @@ void   removeExtraNewLine(String& line);
 
 void   addNewLine(String& line);
 
-size_t UTF8_charLength(char firstByte);
+size_t UTF8_charLength(uint8_t firstByte);
 
 void   replaceUnicodeByChar(String& line, char replChar);
 
@@ -128,16 +155,21 @@ String get_formatted_Controller_number(cpluginID_t cpluginID);
 /*********************************************************************************************\
    Wrap a string with given pre- and postfix string.
 \*********************************************************************************************/
+String wrap_braces(const String& string);
+
 String wrap_String(const String& string,
                    char wrap);
-                   
-void   wrap_String(const String& string,
-                   const String& wrap,
-                   String      & result);
+
+String wrap_String(const String& string,
+                   char char1, char char2);
 
 String wrapIfContains(const String& value,
                       char          contains,
                       char          wrap = '\"');
+
+String wrapWithQuotes(const String& text);
+
+String wrapWithQuotesIfContainsParameterSeparatorChar(const String& text);
 
 /*********************************************************************************************\
    Format an object value pair for use in JSON.
@@ -150,9 +182,16 @@ String to_json_object_value(const __FlashStringHelper * object,
                             const String& value,
                             bool wrapInQuotes = false);
 
+String to_json_object_value(const __FlashStringHelper * object,
+                            String&& value,
+                            bool wrapInQuotes = false);
+
 String to_json_object_value(const String& object,
                             const String& value,
                             bool wrapInQuotes = false);
+
+String to_json_value(const String& value,
+                     bool wrapInQuotes = false);
 
 /*********************************************************************************************\
    Strip wrapping chars (e.g. quotes)
@@ -165,7 +204,13 @@ bool   stringWrappedWithChar(const String& text,
 
 bool   isQuoteChar(char c);
 
+bool   findUnusedQuoteChar(const String& text, char& quotechar) ;
+
 bool   isParameterSeparatorChar(char c);
+
+bool   stringContainsSeparatorChar(const String& text);
+
+bool   isWrappedWithQuotes(const String& text);
 
 String stripQuotes(const String& text);
 
@@ -190,25 +235,40 @@ String to_internal_string(const String& input,
    IndexFind = 1 => command.
     // FIXME TD-er: parseString* should use index starting at 0.
 \*********************************************************************************************/
+String parseString(const char *  string,
+                   uint8_t       indexFind,
+                   char          separator = ',',
+                   bool          trimResult = true);
+
 String parseString(const String& string,
-                   uint8_t          indexFind,
-                   char          separator = ',');
+                   uint8_t       indexFind,
+                   char          separator = ',',
+                   bool          trimResult = true);
 
 String parseStringKeepCase(const String& string,
-                           uint8_t          indexFind,
-                           char          separator = ',');
+                           uint8_t       indexFind,
+                           char          separator = ',',
+                           bool          trimResult = true);
 
 String parseStringToEnd(const String& string,
-                        uint8_t          indexFind,
-                        char          separator = ',');
+                        uint8_t       indexFind,
+                        char          separator = ',',
+                        bool          trimResult = true);
 
 String parseStringToEndKeepCase(const String& string,
-                                uint8_t          indexFind,
-                                char          separator = ',');
+                                uint8_t       indexFind,
+                                char          separator = ',',
+                                bool          trimResult = true);
+
+String tolerantParseStringKeepCase(const char * string,
+                                   uint8_t      indexFind,
+                                   char         separator = ',',
+                                   bool         trimResult = true);
 
 String tolerantParseStringKeepCase(const String& string,
-                                   uint8_t          indexFind,
-                                   char          separator = ',');
+                                   uint8_t       indexFind,
+                                   char          separator = ',',
+                                   bool          trimResult = true);
 
 // escapes special characters in strings for use in html-forms
 bool   htmlEscapeChar(char    c,
@@ -221,7 +281,7 @@ void   htmlEscape(String& html);
 
 void   htmlStrongEscape(String& html);
 
-String URLEncode(const char *msg);
+String URLEncode(const String& msg);
 
 void   repl(const __FlashStringHelper * key,
             const String& val,
@@ -233,15 +293,19 @@ void   repl(const __FlashStringHelper * key,
             String      & s,
             bool       useURLencode);
 
+void   repl(const __FlashStringHelper * key1,
+             const __FlashStringHelper * key2,
+            const char* val,
+            String      & s,
+            bool       useURLencode);
+
 void   repl(const String& key,
             const String& val,
             String      & s,
             bool       useURLencode);
 
-#ifndef BUILD_NO_SPECIAL_CHARACTERS_STRINGCONVERTER
 void parseSpecialCharacters(String& s,
                             bool useURLencode);
-#endif // ifndef BUILD_NO_SPECIAL_CHARACTERS_STRINGCONVERTER
 
 /********************************************************************************************\
    replace other system variables like %sysname%, %systime%, %ip%

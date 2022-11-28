@@ -2,10 +2,11 @@
 #define CONTROLLERQUEUE_MQTT_QUEUE_ELEMENT_H
 
 #include "../../ESPEasy_common.h"
+
+#if FEATURE_MQTT
+
 #include "../DataStructs/UnitMessageCount.h"
 #include "../Globals/CPlugins.h"
-
-#ifdef USES_MQTT
 
 /*********************************************************************************************\
 * MQTT_queue_element for all MQTT base controllers
@@ -15,7 +16,11 @@ public:
 
   MQTT_queue_element() = default;
 
+#ifdef USE_SECOND_HEAP
+  MQTT_queue_element(const MQTT_queue_element& other) = default;
+#else
   MQTT_queue_element(const MQTT_queue_element& other) = delete;
+#endif
   
   MQTT_queue_element(MQTT_queue_element&& other) = default;
 
@@ -49,6 +54,6 @@ public:
   UnitMessageCount_t UnitMessageCount;
 };
 
-#endif // USES_MQTT
+#endif // if FEATURE_MQTT
 
 #endif // CONTROLLERQUEUE_MQTT_QUEUE_ELEMENT_H

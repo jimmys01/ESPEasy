@@ -76,9 +76,10 @@ boolean Plugin_059(uint8_t function, struct EventStruct *event, String& string)
           PCONFIG_LONG(1) = 100;
 
         {
-          const __FlashStringHelper * options[3] = { F("1 pulse per cycle"), F("2 pulses per cycle"), F("4 pulses per cycle") };
+          const __FlashStringHelper * options[3] = { F("1"), F("2"), F("4") }; 
           int optionValues[3] = { 1, 2, 4 };
           addFormSelector(F("Mode"), F("qei_mode"), 3, options, optionValues, PCONFIG(0));
+          addUnit(F("pulses per cycle"));
         }
 
         addFormNumericBox(F("Limit min."), F("qei_limitmin"), PCONFIG_LONG(0));
@@ -132,7 +133,7 @@ boolean Plugin_059(uint8_t function, struct EventStruct *event, String& string)
           log += pin;
           log += ' ';
         }
-        addLog(LOG_LEVEL_INFO, log);
+        addLogMove(LOG_LEVEL_INFO, log);
 
         success = true;
         break;
@@ -154,9 +155,11 @@ boolean Plugin_059(uint8_t function, struct EventStruct *event, String& string)
             UserVar[event->BaseVarIndex] = c;
             event->sensorType = Sensor_VType::SENSOR_TYPE_SWITCH;
 
-            String log = F("QEI  : ");
-            log += c;
-            addLog(LOG_LEVEL_INFO, log);
+            if (loglevelActiveFor(LOG_LEVEL_INFO)) {
+              String log = F("QEI  : ");
+              log += c;
+              addLogMove(LOG_LEVEL_INFO, log);
+            }
 
             sendData(event);
           }
@@ -181,14 +184,14 @@ boolean Plugin_059(uint8_t function, struct EventStruct *event, String& string)
         if (P_059_sensordefs.count(event->TaskIndex) != 0)
         {
             String command = parseString(string, 1);
-            if (command == F("encwrite"))
+            if (command.equals(F("encwrite")))
             {
               if (event->Par1 >= 0)
               {
                 if (loglevelActiveFor(LOG_LEVEL_INFO)) {
                   String log = F("QEI  : ");
                   log += string;
-                  addLog(LOG_LEVEL_INFO, log);
+                  addLogMove(LOG_LEVEL_INFO, log);
                 }
                 P_059_sensordefs[event->TaskIndex]->write(event->Par1);
                 Scheduler.schedule_task_device_timer(event->TaskIndex, millis());

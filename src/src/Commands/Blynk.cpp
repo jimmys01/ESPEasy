@@ -1,5 +1,7 @@
 #include "../Commands/Blynk.h"
 
+#ifdef USES_C012
+
 #include "../Commands/Common.h"
 #include "../DataStructs/ESPEasy_EventStruct.h"
 #include "../ESPEasyCore/ESPEasy_backgroundtasks.h"
@@ -12,7 +14,6 @@
 
 #include "../../ESPEasy_fdwdecl.h"
 
-#ifdef USES_C012
 
 controllerIndex_t firstEnabledBlynk_ControllerIndex() {
   for (controllerIndex_t i = 0; i < CONTROLLER_MAX; ++i) {
@@ -104,40 +105,50 @@ bool Blynk_get(const String& command, controllerIndex_t controllerIndex, float *
               pass.c_str(),
               command.c_str(),
               hostname.c_str());
+#ifndef BUILD_NO_DEBUG
     addLog(LOG_LEVEL_DEBUG, request);
+#endif
     client.print(request);
   }
   bool success = !MustCheckReply;
 
   if (MustCheckReply || data) {
-    unsigned long timer = millis() + 200;
+    unsigned long timer = millis() + ClientTimeout;
 
     while (!client_available(client) && !timeOutReached(timer)) {
       delay(1);
     }
 
+    #ifndef BUILD_NO_DEBUG
     char log[80] = { 0 };
+    #endif
     timer = millis() + 1500;
 
     // Read all the lines of the reply from server and log them
     while (client_available(client) && !success && !timeOutReached(timer)) {
       String line;
       safeReadStringUntil(client, line, '\n');
+      #ifndef BUILD_NO_DEBUG
       addLog(LOG_LEVEL_DEBUG_MORE, line);
+      #endif
 
       // success ?
-      if (line.substring(0, 15) == F("HTTP/1.1 200 OK")) {
+      if (line.substring(0, 15).equals(F("HTTP/1.1 200 OK"))) {
+        #ifndef BUILD_NO_DEBUG
         strcpy_P(log, PSTR("HTTP : Success"));
+        #endif
 
         if (!data) { success = true; }
       }
-      else if (line.substring(0, 24) == F("HTTP/1.1 400 Bad Request")) {
+      #ifndef BUILD_NO_DEBUG
+      else if (line.substring(0, 24).equals(F("HTTP/1.1 400 Bad Request"))) {
         strcpy_P(log, PSTR("HTTP : Unauthorized"));
       }
-      else if (line.substring(0, 25) == F("HTTP/1.1 401 Unauthorized")) {
+      else if (line.substring(0, 25).equals(F("HTTP/1.1 401 Unauthorized"))) {
         strcpy_P(log, PSTR("HTTP : Unauthorized"));
       }
       addLog(LOG_LEVEL_DEBUG, log);
+      #endif
 
       // data only
       if (data && line.startsWith("["))
@@ -152,19 +163,23 @@ bool Blynk_get(const String& command, controllerIndex_t controllerIndex, float *
 
         char value_char[5] = { 0 };
         strValue.toCharArray(value_char, 5);
+        #ifndef BUILD_NO_DEBUG
         sprintf_P(log, PSTR("Blynk get - %s => %s"), command.c_str(), value_char);
         addLog(LOG_LEVEL_DEBUG, log);
+        #endif
       }
       delay(0);
     }
   }
+  #ifndef BUILD_NO_DEBUG
   addLog(LOG_LEVEL_DEBUG, F("HTTP : closing connection (012)"));
+  #endif
 
   client.flush();
   client.stop();
 
   // important - backgroundtasks - free mem
-  unsigned long timer = millis() + ClientTimeout;
+  unsigned long timer = millis() + 10;
 
   while (!timeOutReached(timer)) {
     backgroundtasks();

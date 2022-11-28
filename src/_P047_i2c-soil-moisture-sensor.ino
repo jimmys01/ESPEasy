@@ -13,7 +13,7 @@
 
 #define PLUGIN_047
 #define PLUGIN_ID_047        47
-#define PLUGIN_NAME_047       "Environment - Soil moisture sensor [TESTING]"
+#define PLUGIN_NAME_047       "Environment - Soil moisture sensor"
 #define PLUGIN_VALUENAME1_047 "Temperature"
 #define PLUGIN_VALUENAME2_047 "Moisture"
 #define PLUGIN_VALUENAME3_047 "Light"
@@ -60,6 +60,7 @@ boolean Plugin_047(uint8_t function, struct EventStruct *event, String& string)
       Device[deviceCount].SendDataOption     = true;
       Device[deviceCount].TimerOption        = true;
       Device[deviceCount].GlobalSyncOption   = true;
+      Device[deviceCount].PluginStats        = true;
       break;
     }
 
@@ -197,16 +198,16 @@ boolean Plugin_047(uint8_t function, struct EventStruct *event, String& string)
             log += F(" Version: 0x");
             log += String(sensorVersion, HEX);
           }
-          addLog(LOG_LEVEL_INFO, log);
+          addLogMove(LOG_LEVEL_INFO, log);
           log  = F("SoilMoisture: Temperature: ");
           log += temperature;
-          addLog(LOG_LEVEL_INFO, log);
+          addLogMove(LOG_LEVEL_INFO, log);
           log  = F("SoilMoisture: Moisture: ");
           log += moisture;
-          addLog(LOG_LEVEL_INFO, log);
+          addLogMove(LOG_LEVEL_INFO, log);
           log  = F("SoilMoisture: Light: ");
           log += light;
-          addLog(LOG_LEVEL_INFO, log);
+          addLogMove(LOG_LEVEL_INFO, log);
         }
 
         if (P047_SENSOR_SLEEP) {

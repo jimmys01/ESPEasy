@@ -18,6 +18,11 @@
 // If you like to send suggestions feel free to send me an email : dominik@logview.info
 // Have fun ... Dominik
 
+/** Changelog:
+ * 2022-10-22 tonhuisman: Correct CS pin check to allow GPIO0
+ * 2022-10: Older changelog not recorded
+*/
+
 // Wiring
 // https://de.wikipedia.org/wiki/Serial_Peripheral_Interface
 // You need an ESP8266 device with accessible SPI Pins. These are:
@@ -252,6 +257,7 @@ boolean Plugin_039(uint8_t function, struct EventStruct *event, String& string)
       Device[deviceCount].SendDataOption     = true;
       Device[deviceCount].TimerOption        = true;
       Device[deviceCount].GlobalSyncOption   = true;
+      Device[deviceCount].PluginStats        = true;
       break;
     }
 
@@ -278,7 +284,7 @@ boolean Plugin_039(uint8_t function, struct EventStruct *event, String& string)
       initPluginTaskData(event->TaskIndex, new (std::nothrow) P039_data_struct());
       P039_data_struct *P039_data = static_cast<P039_data_struct *>(getPluginTaskData(event->TaskIndex));
 
-      uint8_t CS_pin_no = get_SPI_CS_Pin(event);
+      int8_t CS_pin_no = get_SPI_CS_Pin(event);
    
       // set the slaveSelectPin as an output:
       init_SPI_CS_Pin(CS_pin_no);
@@ -390,7 +396,7 @@ boolean Plugin_039(uint8_t function, struct EventStruct *event, String& string)
           log = F("P039 : ");                            // 7 char
           log += getTaskDeviceName(event->TaskIndex);    // 41 char
           log += F(" : SPI Init - DONE" );               // 18 char
-          addLog(LOG_LEVEL_INFO, log);
+          addLogMove(LOG_LEVEL_INFO, log);
         }
       }
 
@@ -528,7 +534,7 @@ boolean Plugin_039(uint8_t function, struct EventStruct *event, String& string)
           }
           {
             addFormFloatNumberBox(F("Offset"), F("P039_offset"), P039_RTD_OFFSET, -50.0f, 50.0f, 2, 0.01f);
-            addUnit(F("K"));            
+            addUnit('K');            
             addFormNote(F("Set Offset [K] for MAX31865. Valid values: [-50.0...50.0 K], min. stepsize: [0.01]"));
           }
         }
@@ -618,7 +624,7 @@ boolean Plugin_039(uint8_t function, struct EventStruct *event, String& string)
               log += formatUserVarNoCheck(event->TaskIndex, i);                         //  char 
               log += ' ';                                                               // 1 char
             }
-            addLog(LOG_LEVEL_INFO, log);
+            addLogMove(LOG_LEVEL_INFO, log);
           }
         }
         success = true;
@@ -635,7 +641,7 @@ boolean Plugin_039(uint8_t function, struct EventStruct *event, String& string)
             log += getTaskDeviceName(event->TaskIndex);                               // 41 char
             log += F(" : ");                                                          // 3 char
             log += F("No Sensor attached !");                                         // 20 char
-            addLog(LOG_LEVEL_INFO, log);
+            addLogMove(LOG_LEVEL_INFO, log);
           }
         }
         success = false;
@@ -644,11 +650,11 @@ boolean Plugin_039(uint8_t function, struct EventStruct *event, String& string)
       break;
     }
 
-    case PLUGIN_TIMER_IN: 
+    case PLUGIN_TASKTIMER_IN: 
     {
       P039_data_struct *P039_data = static_cast<P039_data_struct *>(getPluginTaskData(event->TaskIndex));
 
-      uint8_t CS_pin_no = get_SPI_CS_Pin(event);
+      int8_t CS_pin_no = get_SPI_CS_Pin(event);
 
       // Get the MAX Type (6675 / 31855 / 31856)
       uint8_t MaxType = P039_MAX_TYPE;
@@ -682,7 +688,7 @@ boolean Plugin_039(uint8_t function, struct EventStruct *event, String& string)
                         log += F("; delta: ");                                // 9 char
                         log += String(delta, DEC);                            // 4 char
                         log += F(" ms");                                      // 3 char
-                        addLog(LOG_LEVEL_DEBUG, log);
+                        addLogMove(LOG_LEVEL_DEBUG, log);
                       }
                     }
                   # endif // ifndef BUILD_NO_DEBUG
@@ -705,7 +711,7 @@ boolean Plugin_039(uint8_t function, struct EventStruct *event, String& string)
                         log += F(" : ");                                      // 3 char
                         log += F("Next State: ");                             // 12 char
                         log += String(event->Par1, DEC);                      // 4 char
-                        addLog(LOG_LEVEL_DEBUG, log);
+                        addLogMove(LOG_LEVEL_DEBUG, log);
                       }
                     }
                   # endif // ifndef BUILD_NO_DEBUG
@@ -732,7 +738,7 @@ boolean Plugin_039(uint8_t function, struct EventStruct *event, String& string)
                         log += F("; delta: ");                          // 9 char
                         log += String(delta, DEC);                      // 4 char - more than 1000ms delta will not occur
                         log += F(" ms");                                // 2 char   
-                        addLog(LOG_LEVEL_DEBUG, log);
+                        addLogMove(LOG_LEVEL_DEBUG, log);
                       }
                     }
                   # endif // ifndef BUILD_NO_DEBUG
@@ -763,7 +769,7 @@ boolean Plugin_039(uint8_t function, struct EventStruct *event, String& string)
                           log += formatToHex_decimal(P039_data->deviceFaults);       // 9 char
                           log += F("; Next State: ");                        // 13 char
                           log += String(event->Par1, DEC);                   // 4 char
-                          addLog(LOG_LEVEL_DEBUG, log);
+                          addLogMove(LOG_LEVEL_DEBUG, log);
                       }
 
                     }
@@ -791,7 +797,7 @@ boolean Plugin_039(uint8_t function, struct EventStruct *event, String& string)
                         log += F(" : ");                                            // 3 char
                         log += F("current state: MAX31865_INIT_STATE, default;");   // many char - 44
                         log += F(" next state: MAX31865_BIAS_ON_STATE");            // a little less char - 35
-                        addLog(LOG_LEVEL_DEBUG, log);
+                        addLogMove(LOG_LEVEL_DEBUG, log);
                       }
                       
                       // save current timer for next calculation
@@ -829,7 +835,7 @@ boolean Plugin_039(uint8_t function, struct EventStruct *event, String& string)
 
 float readMax6675(struct EventStruct *event)
 {
-  uint8_t CS_pin_no = get_SPI_CS_Pin(event);
+  int8_t CS_pin_no = get_SPI_CS_Pin(event);
 
   uint8_t messageBuffer[2] = {0};
   uint16_t rawvalue = 0u;
@@ -857,7 +863,7 @@ float readMax6675(struct EventStruct *event)
         log += formatToHex_decimal(messageBuffer[0]);          // 9 char 
         log += F(" LSB: ");                          // 5 char
         log += formatToHex_decimal(messageBuffer[1]);          // 9 char
-        addLog(LOG_LEVEL_DEBUG, log);
+        addLogMove(LOG_LEVEL_DEBUG, log);
       }
     }
 
@@ -890,7 +896,7 @@ float readMax31855(struct EventStruct *event)
 
   uint8_t messageBuffer[4] = {0};
 
-  uint8_t CS_pin_no = get_SPI_CS_Pin(event);
+  int8_t CS_pin_no = get_SPI_CS_Pin(event);
 
   // "transfer" 0x0 and read the 32 Bit conversion register from the Chip
   transfer_n_ByteSPI(CS_pin_no, 4, &messageBuffer[0]);
@@ -918,7 +924,7 @@ float readMax31855(struct EventStruct *event)
                 log += ' ';                                 // 1 char
                 log += formatToHex_decimal(messageBuffer[i]);  // 9 char
         }
-        addLog(LOG_LEVEL_DEBUG, log);
+        addLogMove(LOG_LEVEL_DEBUG, log);
       }
     }
 
@@ -932,6 +938,8 @@ float readMax31855(struct EventStruct *event)
       if (P039_data->sensorFault != ((rawvalue & (MAX31855_TC_SCVCC | MAX31855_TC_SC | MAX31855_TC_OC)) == 0)) {
         // Fault code changed, log them
         P039_data->sensorFault = ((rawvalue & (MAX31855_TC_SCVCC | MAX31855_TC_SC | MAX31855_TC_OC)) == 0);
+
+#ifndef BUILD_NO_DEBUG
 
          if (loglevelActiveFor(LOG_LEVEL_DEBUG_MORE)) 
           {
@@ -956,10 +964,10 @@ float readMax31855(struct EventStruct *event)
                   log += F(" Short-circuit to Vcc");
                 }
               }
-              addLog(LOG_LEVEL_DEBUG_MORE, log);
+              addLogMove(LOG_LEVEL_DEBUG_MORE, log);
             }
           } 
-
+#endif
 
       }
 
@@ -974,7 +982,7 @@ float readMax31855(struct EventStruct *event)
             log += formatToHex_decimal(rawvalue);
             log += F(" P039_data->sensorFault: ");
             log += formatToHex_decimal(P039_data->sensorFault);
-            addLog(LOG_LEVEL_DEBUG, log);
+            addLogMove(LOG_LEVEL_DEBUG, log);
           }
         } 
        
@@ -1016,7 +1024,7 @@ float readMax31856(struct EventStruct *event)
 
   P039_data_struct *P039_data = static_cast<P039_data_struct *>(getPluginTaskData(event->TaskIndex));
   
-  uint8_t CS_pin_no = get_SPI_CS_Pin(event);
+  int8_t CS_pin_no = get_SPI_CS_Pin(event);
 
 
   uint8_t registers[MAX31856_NO_REG] = { 0 };
@@ -1063,7 +1071,7 @@ float readMax31856(struct EventStruct *event)
         }
         log+= F(" rawvalue: ");
         log+= formatToHex_decimal(rawvalue);
-        addLog(LOG_LEVEL_DEBUG, log);
+        addLogMove(LOG_LEVEL_DEBUG, log);
       }
     }
 
@@ -1090,10 +1098,10 @@ float readMax31856(struct EventStruct *event)
 
     P039_data->sensorFault = (sr != 0); // Set new state
 
-    const bool faultResolved = (P039_data->sensorFault) && (sr == 0);
-
+#ifndef BUILD_NO_DEBUG
     if (loglevelActiveFor(LOG_LEVEL_DEBUG_MORE)) 
     {
+      const bool faultResolved = (P039_data->sensorFault) && (sr == 0);
       if ((P039_data->sensorFault) || faultResolved) {
         String log;
         if((log.reserve(140u))) { // reserve value derived from example log file
@@ -1135,11 +1143,12 @@ float readMax31856(struct EventStruct *event)
             if (sr & MAX31856_TC_CJRANGE) {
               log += F(" CJ Range");
             }
-          addLog(LOG_LEVEL_DEBUG_MORE, log);
+            addLogMove(LOG_LEVEL_DEBUG_MORE, log);
           }
         }
       }
     }
+#endif
   }
 
 
@@ -1196,7 +1205,7 @@ float readMax31865(struct EventStruct *event)
   uint8_t registers[MAX31865_NO_REG] = {0};
   uint16_t rawValue = 0u;
 
-  uint8_t CS_pin_no = get_SPI_CS_Pin(event);
+  int8_t CS_pin_no = get_SPI_CS_Pin(event);
 
   # ifndef BUILD_NO_DEBUG
 
@@ -1209,7 +1218,7 @@ float readMax31865(struct EventStruct *event)
           log += F(" P039_data->convReady: ");
           log += boolToString(P039_data->convReady);
 
-          addLog(LOG_LEVEL_DEBUG, log);
+          addLogMove(LOG_LEVEL_DEBUG, log);
         }
       }
 
@@ -1219,7 +1228,7 @@ float readMax31865(struct EventStruct *event)
 
   // read conversion result and faults from plugin data structure 
   // if pointer exists and conversion has been finished
-  if ((nullptr != P039_data) && (true == P039_data->convReady)) {
+  if (P039_data->convReady) {
     rawValue = P039_data->conversionResult;
     registers[MAX31865_FAULT] = P039_data->deviceFaults;
   }
@@ -1245,7 +1254,7 @@ float readMax31865(struct EventStruct *event)
           log += formatToHex_decimal(registers[i]);
         }
 
-        addLog(LOG_LEVEL_DEBUG_MORE, log);
+        addLogMove(LOG_LEVEL_DEBUG_MORE, log);
       }
     }
 
@@ -1267,15 +1276,14 @@ float readMax31865(struct EventStruct *event)
 
   // start time to follow up on BIAS activation before starting the conversion
   // and start conversion sequence via TIMER API
-  if(nullptr != P039_data){
-    // save current timer for next calculation
-    P039_data->timer = millis();
+  // save current timer for next calculation
+  P039_data->timer = millis();
 
-    // set next state to MAX31865_BIAS_ON_STATE
+  // set next state to MAX31865_BIAS_ON_STATE
 
-    Scheduler.setPluginTaskTimer(MAX31865_BIAS_WAIT_TIME, event->TaskIndex, MAX31865_BIAS_ON_STATE);
-  }
+  Scheduler.setPluginTaskTimer(MAX31865_BIAS_WAIT_TIME, event->TaskIndex, MAX31865_BIAS_ON_STATE);
  
+ #ifndef BUILD_NO_DEBUG
     if (loglevelActiveFor(LOG_LEVEL_DEBUG_MORE))
     {
       if (registers[MAX31865_FAULT])
@@ -1317,10 +1325,11 @@ float readMax31865(struct EventStruct *event)
           {
             log += F(" RTD High Threshold");
           }
-          addLog(LOG_LEVEL_DEBUG_MORE, log);
+          addLogMove(LOG_LEVEL_DEBUG_MORE, log);
         }
       }
     }
+    #endif
 
 
   bool ValueValid = false;
@@ -1339,7 +1348,7 @@ float readMax31865(struct EventStruct *event)
         log += formatToHex_decimal(registers[MAX31865_FAULT]);      // 7 char
         log += F(" ValueValid: ");                                  // 13 char       
         log += boolToString(ValueValid);                            // 5 char
-        addLog(LOG_LEVEL_DEBUG, log);
+        addLogMove(LOG_LEVEL_DEBUG, log);
       }
     }
 
@@ -1366,7 +1375,7 @@ float readMax31865(struct EventStruct *event)
           log += String(P039_RTD_TYPE, DEC);          // 1 char
           log += F(" P039_RTD_RES: ");                // 15 char
           log += String(P039_RTD_RES, DEC);           // 4 char
-          addLog(LOG_LEVEL_DEBUG, log);
+          addLogMove(LOG_LEVEL_DEBUG, log);
         }
       }
 
@@ -1385,7 +1394,7 @@ float readMax31865(struct EventStruct *event)
   }
 }
 
-void MAX31865_clearFaults(uint8_t l_CS_pin_no)
+void MAX31865_clearFaults(int8_t l_CS_pin_no)
 {
   uint8_t l_reg = 0u;
 
@@ -1402,7 +1411,7 @@ void MAX31865_clearFaults(uint8_t l_CS_pin_no)
 
 }
 
-void MAX31865_setConType(uint8_t l_CS_pin_no, uint8_t l_conType)
+void MAX31865_setConType(int8_t l_CS_pin_no, uint8_t l_conType)
 {
    bool l_set_reset = false;
 
@@ -1520,7 +1529,7 @@ float readLM7x(struct EventStruct *event)
   uint16_t device_id = 0u;
   uint16_t rawValue = 0u;
 
-  uint8_t CS_pin_no = get_SPI_CS_Pin(event);
+  int8_t CS_pin_no = get_SPI_CS_Pin(event);
 
   // operate LM7x devices in polling mode, assuming conversion is ready with every call of this read function ( >=210ms call cycle)
   // this allows usage of multiples generations of LM7x devices, that doe not provde conversion ready information in temperature register
@@ -1542,7 +1551,7 @@ float readLM7x(struct EventStruct *event)
         log += formatToHex(device_id);
         log += F(" temperature: ");
         log += String(temperature, DEC);
-        addLog(LOG_LEVEL_DEBUG, log);
+        addLogMove(LOG_LEVEL_DEBUG, log);
       }
     }
 
@@ -1616,7 +1625,7 @@ float convertLM7xTemp(uint16_t l_rawValue, uint16_t l_LM7xsubtype)
         log += String(l_noBits, DEC);
         log += F(" l_lsbvalue: ");
         log += String(l_lsbvalue, DEC);
-        addLog(LOG_LEVEL_DEBUG_MORE, log);
+        addLogMove(LOG_LEVEL_DEBUG_MORE, log);
       }
     }
 
@@ -1625,7 +1634,7 @@ float convertLM7xTemp(uint16_t l_rawValue, uint16_t l_LM7xsubtype)
   return (l_returnValue);
 }
 
-uint16_t readLM7xRegisters(uint8_t l_CS_pin_no, uint8_t l_LM7xsubType, uint8_t l_runMode, uint16_t *l_device_id)
+uint16_t readLM7xRegisters(int8_t l_CS_pin_no, uint8_t l_LM7xsubType, uint8_t l_runMode, uint16_t *l_device_id)
 {
   uint16_t l_returnValue = 0u;
   uint16_t l_mswaitTime = 0u;
@@ -1748,7 +1757,7 @@ uint16_t readLM7xRegisters(uint8_t l_CS_pin_no, uint8_t l_LM7xsubType, uint8_t l
         log += formatToHex_decimal(l_returnValue);
         log += F(" l_device_id: ");
         log += formatToHex(*(l_device_id));
-        addLog(LOG_LEVEL_DEBUG_MORE, log);
+        addLogMove(LOG_LEVEL_DEBUG_MORE, log);
       }
     }
 
@@ -1785,7 +1794,7 @@ uint16_t readLM7xRegisters(uint8_t l_CS_pin_no, uint8_t l_LM7xsubType, uint8_t l
     
 /**************************************************************************/
 int get_SPI_CS_Pin(struct EventStruct *event) {  // If no Pin is in Config we use 15 as default -> Hardware Chip Select on ESP8266
-  if (CONFIG_PIN1 != 0) {
+  if (CONFIG_PIN1 != -1) {
     return CONFIG_PIN1;
   }
   return 15; // D8
@@ -1801,7 +1810,7 @@ int get_SPI_CS_Pin(struct EventStruct *event) {  // If no Pin is in Config we us
     Initial Revision - chri.kai.in 2021 
 
 /**************************************************************************/
-void init_SPI_CS_Pin (uint8_t l_CS_pin_no) {
+void init_SPI_CS_Pin (int8_t l_CS_pin_no) {
   
       // set the slaveSelectPin as an output:
       pinMode(l_CS_pin_no, OUTPUT);
@@ -1819,7 +1828,7 @@ void init_SPI_CS_Pin (uint8_t l_CS_pin_no) {
     Initial Revision - chri.kai.in 2021 
 
 /**************************************************************************/
-void handle_SPI_CS_Pin (uint8_t l_CS_pin_no, bool l_state) {
+void handle_SPI_CS_Pin (int8_t l_CS_pin_no, bool l_state) {
   
   P039_CS_Delay(); // tCWH (min) >= x00ns
   digitalWrite(l_CS_pin_no, l_state);
@@ -1840,7 +1849,7 @@ void handle_SPI_CS_Pin (uint8_t l_CS_pin_no, bool l_state) {
 
 /**************************************************************************/
 
-void write8BitRegister(uint8_t l_CS_pin_no, uint8_t l_address, uint8_t value)
+void write8BitRegister(int8_t l_CS_pin_no, uint8_t l_address, uint8_t value)
 {
   uint8_t l_messageBuffer[2] = {l_address, value};
 
@@ -1857,7 +1866,7 @@ void write8BitRegister(uint8_t l_CS_pin_no, uint8_t l_address, uint8_t value)
         log += formatToHex(l_address);
         log += F(" value: ");
         log += formatToHex_decimal(value);
-        addLog(LOG_LEVEL_DEBUG_MORE, log);
+        addLogMove(LOG_LEVEL_DEBUG_MORE, log);
       }
     }
 
@@ -1877,7 +1886,7 @@ void write8BitRegister(uint8_t l_CS_pin_no, uint8_t l_address, uint8_t value)
 
 /**************************************************************************/
 
-void write16BitRegister(uint8_t l_CS_pin_no, uint8_t l_address, uint16_t value)
+void write16BitRegister(int8_t l_CS_pin_no, uint8_t l_address, uint16_t value)
 {
   uint8_t l_messageBuffer[3] = {l_address, static_cast<uint8_t> ((value >> 8) & 0xFF), static_cast<uint8_t> (value & 0xFF)};
 
@@ -1894,7 +1903,7 @@ void write16BitRegister(uint8_t l_CS_pin_no, uint8_t l_address, uint16_t value)
         log += formatToHex(l_address);
         log += F(" value: ");
         log += formatToHex_decimal(value);
-        addLog(LOG_LEVEL_DEBUG_MORE, log);
+        addLogMove(LOG_LEVEL_DEBUG_MORE, log);
       }
     }
 
@@ -1913,7 +1922,7 @@ void write16BitRegister(uint8_t l_CS_pin_no, uint8_t l_address, uint16_t value)
 
 /**************************************************************************/
 
-uint8_t read8BitRegister(uint8_t l_CS_pin_no, uint8_t l_address)
+uint8_t read8BitRegister(int8_t l_CS_pin_no, uint8_t l_address)
 {
   uint8_t l_messageBuffer[2] = {l_address, 0x00};
 
@@ -1930,7 +1939,7 @@ uint8_t read8BitRegister(uint8_t l_CS_pin_no, uint8_t l_address)
         log += formatToHex(l_address);
         log += F(" returnvalue: ");
         log += formatToHex_decimal(l_messageBuffer[1]);
-        addLog(LOG_LEVEL_DEBUG_MORE, log);
+        addLogMove(LOG_LEVEL_DEBUG_MORE, log);
       }
     }
 
@@ -1951,7 +1960,7 @@ uint8_t read8BitRegister(uint8_t l_CS_pin_no, uint8_t l_address)
 
 /**************************************************************************/
 
-uint16_t read16BitRegister(uint8_t l_CS_pin_no, uint8_t l_address)
+uint16_t read16BitRegister(int8_t l_CS_pin_no, uint8_t l_address)
 {
   uint8_t l_messageBuffer[3] = {l_address, 0x00 , 0x00};
   uint16_t l_returnValue;
@@ -1970,7 +1979,7 @@ uint16_t read16BitRegister(uint8_t l_CS_pin_no, uint8_t l_address)
         log += formatToHex(l_address);
         log += F(" l_returnValue: ");
         log += formatToHex_decimal(l_returnValue);
-        addLog(LOG_LEVEL_DEBUG_MORE, log);
+        addLogMove(LOG_LEVEL_DEBUG_MORE, log);
       }
     }
 
@@ -1993,7 +2002,7 @@ uint16_t read16BitRegister(uint8_t l_CS_pin_no, uint8_t l_address)
 
 /**************************************************************************/
 
-void transfer_n_ByteSPI(uint8_t l_CS_pin_no, uint8_t l_noBytesToSend, uint8_t* l_inoutMessageBuffer )
+void transfer_n_ByteSPI(int8_t l_CS_pin_no, uint8_t l_noBytesToSend, uint8_t* l_inoutMessageBuffer )
 {
  
 
@@ -2020,7 +2029,7 @@ void transfer_n_ByteSPI(uint8_t l_CS_pin_no, uint8_t l_noBytesToSend, uint8_t* l
           log += ' ';                                               // 1 char
           log += formatToHex_decimal(l_inoutMessageBuffer[i]);      // 9 char
         }
-        addLog(LOG_LEVEL_DEBUG_MORE, log);
+        addLogMove(LOG_LEVEL_DEBUG_MORE, log);
       }
     }
 
@@ -2044,7 +2053,7 @@ void transfer_n_ByteSPI(uint8_t l_CS_pin_no, uint8_t l_noBytesToSend, uint8_t* l
 
 /**************************************************************************/
 
-void change16BitRegister(uint8_t l_CS_pin_no, uint8_t l_readaddress, uint8_t l_writeaddress, uint16_t l_flagmask, bool l_set_reset )
+void change16BitRegister(int8_t l_CS_pin_no, uint8_t l_readaddress, uint8_t l_writeaddress, uint16_t l_flagmask, bool l_set_reset )
 {
   uint16_t l_reg = 0u;
 
@@ -2081,7 +2090,7 @@ void change16BitRegister(uint8_t l_CS_pin_no, uint8_t l_readaddress, uint8_t l_w
 
 /**************************************************************************/
 
-void change8BitRegister(uint8_t l_CS_pin_no, uint8_t l_readaddress, uint8_t l_writeaddress, uint8_t l_flagmask, bool l_set_reset )
+void change8BitRegister(int8_t l_CS_pin_no, uint8_t l_readaddress, uint8_t l_writeaddress, uint8_t l_flagmask, bool l_set_reset )
 {
   uint8_t l_reg = 0u;
 

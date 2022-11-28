@@ -9,9 +9,9 @@
 \*********************************************************************************************/
 const __FlashStringHelper* formatGpioDirection(gpio_direction direction) {
   switch (direction) {
-    case gpio_input:         return F("&larr; ");
-    case gpio_output:        return F("&rarr; ");
-    case gpio_bidirectional: return F("&#8644; ");
+    case gpio_direction::gpio_input:         return F("&larr; ");
+    case gpio_direction::gpio_output:        return F("&rarr; ");
+    case gpio_direction::gpio_bidirectional: return F("&#8644; ");
   }
   return F("");
 }
@@ -29,8 +29,8 @@ String formatGpioLabel(int gpio, bool includeWarning) {
   return F("-");
 }
 
-String formatGpioName(const String& label, gpio_direction direction, bool optional) {
-  int reserveLength = 5 /* "GPIO " */ + 8 /* "&#8644; " */ + label.length();
+String formatGpioName(const __FlashStringHelper * label, gpio_direction direction, bool optional) {
+  int reserveLength = 5 /* "GPIO " */ + 8 /* "&#8644; " */ + strlen_P((PGM_P)label);
 
   if (optional) {
     reserveLength += 11;
@@ -48,46 +48,42 @@ String formatGpioName(const String& label, gpio_direction direction, bool option
   return result;
 }
 
-String formatGpioName(const String& label, gpio_direction direction) {
-  return formatGpioName(label, direction, false);
+String formatGpioName_input(const __FlashStringHelper * label) {
+  return formatGpioName(label, gpio_direction::gpio_input, false);
 }
 
-String formatGpioName_input(const String& label) {
-  return formatGpioName(label, gpio_input, false);
+String formatGpioName_output(const __FlashStringHelper * label) {
+  return formatGpioName(label, gpio_direction::gpio_output, false);
 }
 
-String formatGpioName_output(const String& label) {
-  return formatGpioName(label, gpio_output, false);
+String formatGpioName_bidirectional(const __FlashStringHelper * label) {
+  return formatGpioName(label, gpio_direction::gpio_bidirectional, false);
 }
 
-String formatGpioName_bidirectional(const String& label) {
-  return formatGpioName(label, gpio_bidirectional, false);
+String formatGpioName_input_optional(const __FlashStringHelper * label) {
+  return formatGpioName(label, gpio_direction::gpio_input, true);
 }
 
-String formatGpioName_input_optional(const String& label) {
-  return formatGpioName(label, gpio_input, true);
-}
-
-String formatGpioName_output_optional(const String& label) {
-  return formatGpioName(label, gpio_output, true);
+String formatGpioName_output_optional(const __FlashStringHelper * label) {
+  return formatGpioName(label, gpio_direction::gpio_output, true);
 }
 
 // RX/TX are the only signals which are crossed, so they must be labelled like this:
 // "GPIO <-- TX" and "GPIO --> RX"
 String formatGpioName_TX(bool optional) {
-  return formatGpioName(F("RX"), gpio_output, optional);
+  return formatGpioName(F("RX"), gpio_direction::gpio_output, optional);
 }
 
 String formatGpioName_RX(bool optional) {
-  return formatGpioName(F("TX"), gpio_input, optional);
+  return formatGpioName(F("TX"), gpio_direction::gpio_input, optional);
 }
 
 String formatGpioName_TX_HW(bool optional) {
-  return formatGpioName(F("RX (HW)"), gpio_output, optional);
+  return formatGpioName(F("RX (HW)"), gpio_direction::gpio_output, optional);
 }
 
 String formatGpioName_RX_HW(bool optional) {
-  return formatGpioName(F("TX (HW)"), gpio_input, optional);
+  return formatGpioName(F("TX (HW)"), gpio_direction::gpio_input, optional);
 }
 
 #ifdef ESP32
@@ -154,21 +150,22 @@ const __FlashStringHelper* getConflictingUse(int gpio, PinSelectPurpose purpose)
   bool includeI2C = true;
   bool includeSPI = true;
 
-  #ifdef HAS_ETHERNET
+  #if FEATURE_ETHERNET
   bool includeEthernet = true;
-  #endif // ifdef HAS_ETHERNET
+  #endif // if FEATURE_ETHERNET
 
   switch (purpose) {
     case PinSelectPurpose::I2C:
       includeI2C = false;
       break;
     case PinSelectPurpose::SPI:
+    case PinSelectPurpose::SPI_MISO:
       includeSPI = false;
       break;
     case PinSelectPurpose::Ethernet:
-      #ifdef HAS_ETHERNET
+      #if FEATURE_ETHERNET
       includeEthernet = false;
-      #endif // ifdef HAS_ETHERNET
+      #endif // if FEATURE_ETHERNET
       break;
     case PinSelectPurpose::Generic:
     case PinSelectPurpose::Generic_input:
@@ -184,7 +181,7 @@ const __FlashStringHelper* getConflictingUse(int gpio, PinSelectPurpose purpose)
   if (includeSPI && Settings.isSPI_pin(gpio)) {
     return F("SPI");
   }
-  #ifdef HAS_ETHERNET
+  #if FEATURE_ETHERNET
 
   if (Settings.isEthernetPin(gpio)) {
     return F("Eth");
@@ -199,7 +196,19 @@ const __FlashStringHelper* getConflictingUse(int gpio, PinSelectPurpose purpose)
 
     return F("Eth");
   }
-  #endif // ifdef HAS_ETHERNET
+  #endif // if FEATURE_ETHERNET
+
+#ifdef ESP32
+  if (FoundPSRAM()) {
+    // PSRAM can use GPIO 16 and 17
+    switch (gpio) {
+      case 16:
+      case 17:
+        return F("PSRAM");
+    }
+  }
+#endif
+
   return F("");
 }
 

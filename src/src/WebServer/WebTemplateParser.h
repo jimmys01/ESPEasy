@@ -1,6 +1,8 @@
 #ifndef WEBSERVER_WEBTEMPLATEPARSER_H
 #define WEBSERVER_WEBTEMPLATEPARSER_H
 
+#include "../../ESPEasy_common.h"
+
 #include <Arduino.h>
 
 
@@ -18,6 +20,8 @@
 #define MENU_INDEX_RULES         5
 #define MENU_INDEX_NOTIFICATIONS 6
 #define MENU_INDEX_TOOLS         7
+#define MENU_INDEX_SETUP         254
+#define MENU_INDEX_CUSTOM_PAGE   255
 extern uint8_t navMenuIndex;
 
 
@@ -31,6 +35,8 @@ public:
   bool process(const __FlashStringHelper * pstr);
   bool process(PGM_P str);
   bool process(const String& str);
+
+  bool isTail() const { return Tail; }
 
 private:
 

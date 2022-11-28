@@ -14,7 +14,7 @@
 
 #define PLUGIN_066
 #define PLUGIN_ID_066         66
-#define PLUGIN_NAME_066       "Color - VEML6040 [TESTING]"
+#define PLUGIN_NAME_066       "Color - VEML6040"
 #define PLUGIN_VALUENAME1_066 "R"
 #define PLUGIN_VALUENAME2_066 "G"
 #define PLUGIN_VALUENAME3_066 "B"
@@ -44,6 +44,7 @@ boolean Plugin_066(uint8_t function, struct EventStruct *event, String& string)
       Device[deviceCount].TimerOption        = true;
       Device[deviceCount].TimerOptional      = false;
       Device[deviceCount].GlobalSyncOption   = true;
+      Device[deviceCount].PluginStats        = true;
       break;
     }
 
@@ -79,7 +80,7 @@ boolean Plugin_066(uint8_t function, struct EventStruct *event, String& string)
       {
         const __FlashStringHelper * optionsMode[6] = { F("40ms (16496)"), F("80ms (8248)"), F("160ms (4124)"), F("320ms (2062)"), F("640ms (1031)"), F(
                                     "1280ms (515)") };
-        addFormSelector(F("Integration Time (Max Lux)"), F("itime"), 6, optionsMode, NULL, PCONFIG(1));
+        addFormSelector(F("Integration Time (Max Lux)"), F("itime"), 6, optionsMode, nullptr, PCONFIG(1));
       }
 
       {
@@ -90,7 +91,7 @@ boolean Plugin_066(uint8_t function, struct EventStruct *event, String& string)
           F("R, G, B, Color Temperature [K]"),
           F("R, G, B, Ambient Light [Lux]"),
           F("Color Temperature [K], Ambient Light [Lux], Y, W") };
-        addFormSelector(F("Value Mapping"), F("map"), 6, optionsVarMap, NULL, PCONFIG(2));
+        addFormSelector(F("Value Mapping"), F("map"), 6, optionsVarMap, nullptr, PCONFIG(2));
       }
 
       success = true;
@@ -229,7 +230,7 @@ float Plugin_066_CalcCCT(float R, float G, float B)
 
 float Plugin_066_CalcAmbientLight(float G, uint8_t it)
 {
-  float Sensitivity[6] = { 0.25168f, 0.12584f, 0.06292f, 0.03146f, 0.01573f, 0.007865f };
+  float Sensitivity[6] = { 0.25168f, 0.12584f, 0.06292f, 0.03146f, 0.01573f, 0.007865f }; //-V624
 
   return G * Sensitivity[it];
 }

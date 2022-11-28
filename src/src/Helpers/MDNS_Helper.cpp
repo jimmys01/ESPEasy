@@ -12,7 +12,7 @@
 #include "../Helpers/StringProvider.h"
 
 void set_mDNS() {
-  #ifdef FEATURE_MDNS
+  #if FEATURE_MDNS
 
   if (!WiFiEventData.WiFiServicesInitialized()) { return; }
 
@@ -32,7 +32,7 @@ void set_mDNS() {
         else {
           log += F("mDNS failed");
         }
-        addLog(LOG_LEVEL_INFO, log);
+        addLogMove(LOG_LEVEL_INFO, log);
       }
       if (mDNS_init) {
         MDNS.addService(F("http"), F("tcp"), Settings.WebserverPort);
@@ -46,5 +46,5 @@ void set_mDNS() {
     mDNS_init = false;
     #endif
   }
-  #endif // ifdef FEATURE_MDNS
+  #endif // if FEATURE_MDNS
 }

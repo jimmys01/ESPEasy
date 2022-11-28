@@ -55,7 +55,7 @@ boolean Plugin_040(uint8_t function, struct EventStruct *event, String& string)
         break;
       }
 
-    case PLUGIN_TIMER_IN:
+    case PLUGIN_TASKTIMER_IN:
       {
         if (Plugin_040_init) {
             // Reset card id on timeout
@@ -151,7 +151,7 @@ boolean Plugin_040(uint8_t function, struct EventStruct *event, String& string)
                   log += F("Old Tag: "); 
                 }
                 log += key;
-                addLog(LOG_LEVEL_INFO, log);
+                addLogMove(LOG_LEVEL_INFO, log);
               }
               
               if (new_key) sendData(event);

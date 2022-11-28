@@ -10,7 +10,7 @@
 
 #include <FS.h>
 
-#ifdef FEATURE_SD
+#if FEATURE_SD
 #include <SD.h>
 #endif
 
@@ -37,9 +37,11 @@ const __FlashStringHelper * getLogLevelDisplayString(int logLevel) {
     case LOG_LEVEL_NONE:       return F("None");
     case LOG_LEVEL_ERROR:      return F("Error");
     case LOG_LEVEL_INFO:       return F("Info");
+# ifndef BUILD_NO_DEBUG
     case LOG_LEVEL_DEBUG:      return F("Debug");
     case LOG_LEVEL_DEBUG_MORE: return F("Debug More");
     case LOG_LEVEL_DEBUG_DEV:  return F("Debug dev");
+#endif
 
     default:
     break;
@@ -51,9 +53,11 @@ const __FlashStringHelper * getLogLevelDisplayStringFromIndex(uint8_t index, int
   switch (index) {
     case 0: logLevel = LOG_LEVEL_ERROR;      break;
     case 1: logLevel = LOG_LEVEL_INFO;       break;
+# ifndef BUILD_NO_DEBUG
     case 2: logLevel = LOG_LEVEL_DEBUG;      break;
     case 3: logLevel = LOG_LEVEL_DEBUG_MORE; break;
     case 4: logLevel = LOG_LEVEL_DEBUG_DEV;  break;
+#endif
 
     default: logLevel = -1; return F("");
   }
@@ -100,14 +104,14 @@ void updateLogLevelCache() {
   if (Logging.logActiveRead()) {
     max_lvl = _max(max_lvl, Settings.WebLogLevel);
   }
-#ifdef FEATURE_SD
+#if FEATURE_SD
   max_lvl = _max(max_lvl, Settings.SDLogLevel);
 #endif
   highest_active_log_level = max_lvl;
 }
 
 bool loglevelActiveFor(uint8_t logLevel) {
-  return loglevelActive(logLevel, highest_active_log_level);
+  return logLevel <= highest_active_log_level;
 }
 
 uint8_t getSerialLogLevel() {
@@ -148,7 +152,7 @@ bool loglevelActiveFor(uint8_t destination, uint8_t logLevel) {
       break;
     }
     case LOG_TO_SDCARD: {
-      #ifdef FEATURE_SD
+      #if FEATURE_SD
       logLevelSettings = Settings.SDLogLevel;
       #endif
       break;
@@ -156,53 +160,88 @@ bool loglevelActiveFor(uint8_t destination, uint8_t logLevel) {
     default:
       return false;
   }
-  return loglevelActive(logLevel, logLevelSettings);
+  return logLevel <= logLevelSettings;
 }
 
-
-bool loglevelActive(uint8_t logLevel, uint8_t logLevelSettings) {
-  return (logLevel <= logLevelSettings);
-}
-
-//#ifdef LIMIT_BUILD_SIZE
-
-void addLog(uint8_t loglevel, const __FlashStringHelper *str)
+void addLog(uint8_t logLevel, const __FlashStringHelper *str)
 {
-  addToLog(loglevel, str);
+  if (loglevelActiveFor(logLevel)) {
+    String copy;
+    {
+      #ifdef USE_SECOND_HEAP
+      // Allow to store the logs in 2nd heap if present.
+      HeapSelectIram ephemeral;
+      #endif
+
+      if (!copy.reserve(strlen_P((PGM_P)str))) {
+        return;
+      }
+      copy = str;
+    }
+    addToLogMove(logLevel, std::move(copy));
+  }
 }
 
 void addLog(uint8_t logLevel, const char *line)
 {
-  addToLog(logLevel, line);
-}
-
-void addLog(uint8_t loglevel, const String& string)
-{
-  addToLog(loglevel, string);
-}
-//#endif
-
-void addToLog(uint8_t loglevel, const __FlashStringHelper *str)
-{
-  if (loglevelActiveFor(loglevel)) {
-    String copy;
-    if (copy.reserve(strlen_P((PGM_P)str))) {
-      copy = str;
-      addToLog(loglevel, copy.c_str());
-    }
-  }
-}
-
-void addToLog(uint8_t loglevel, const String& string)
-{
-  if (loglevelActiveFor(loglevel)) {
-    addToLog(loglevel, string.c_str());
-  }
-}
-
-void addToLog(uint8_t logLevel, const char *line)
-{
   // Please note all functions called from here handling line must be PROGMEM aware.
+  if (loglevelActiveFor(logLevel)) {
+
+    String copy;
+    #ifdef USE_SECOND_HEAP
+    {
+      // Allow to store the logs in 2nd heap if present.
+      HeapSelectIram ephemeral;
+
+      if (mmu_is_iram(line)) {
+        size_t length = 0;
+        const char* cur_char = line;
+        bool copying = false;
+        bool done = false;
+        while (!done) {
+          const uint8_t ch = mmu_get_uint8(cur_char++);
+          if (ch == 0) {
+            if (copying) {
+              done = true;
+            } else {
+              if (!copy.reserve(length)) {
+                return;
+              }
+              copying = true;
+              cur_char = line;
+            }
+          } else {
+            if (copying) {
+              copy +=  (char)ch;
+            } else {
+              ++length;
+            }
+          }
+        }
+      } else {
+        if (!copy.reserve(strlen_P((PGM_P)line))) {
+          return;
+        }
+        copy = line;
+      }
+    }
+    #else 
+    if (!copy.reserve(strlen_P((PGM_P)line))) {
+      return;
+    }
+    copy = line;
+    #endif
+    addToLogMove(logLevel, std::move(copy));
+  }
+}
+
+void addLog(uint8_t logLevel, String&& string)
+{
+  addToLogMove(logLevel, std::move(string));
+}
+
+void addToSerialLog(uint8_t logLevel, const String& string)
+{
   if (loglevelActiveFor(LOG_TO_SERIAL, logLevel)) {
     addToSerialBuffer(String(millis()));
     addToSerialBuffer(F(" : "));
@@ -214,34 +253,56 @@ void addToLog(uint8_t logLevel, const char *line)
       addToSerialBuffer(loglevelDisplayString);
     }
     addToSerialBuffer(F(" : "));
-    addToSerialBuffer(line);
+    addToSerialBuffer(string);
     addNewlineToSerialBuffer();
   }
-  if (loglevelActiveFor(LOG_TO_SYSLOG, logLevel)) {
-    syslog(logLevel, line);
-  }
-  if (loglevelActiveFor(LOG_TO_WEBLOG, logLevel)) {
-    Logging.add(logLevel, line);
-  }
+}
 
-#ifdef FEATURE_SD
+void addToSysLog(uint8_t logLevel, const String& string)
+{
+  if (loglevelActiveFor(LOG_TO_SYSLOG, logLevel)) {
+    sendSyslog(logLevel, string);
+  }
+}
+
+void addToSDLog(uint8_t logLevel, const String& string)
+{
+#if FEATURE_SD
   if (loglevelActiveFor(LOG_TO_SDCARD, logLevel)) {
-    File logFile = SD.open("log.dat", FILE_WRITE);
+    fs::File logFile = SD.open("log.dat", FILE_WRITE);
     if (logFile) {
-      const char* c = line;
-      bool done = false;
-      while (!done) {
-        // Must use PROGMEM aware functions here to process line
-        char ch = pgm_read_byte(c++);
-        if (ch == '\0') {
-          done = true;
-        } else {
-          logFile.print(ch);
-        }
+      const size_t stringLength = string.length();
+      for (size_t i = 0; i < stringLength; ++i) {
+        logFile.print(string[i]);
       }
       logFile.println();
     }
     logFile.close();
   }
 #endif
+}
+
+
+void addLog(uint8_t logLevel, const String& string)
+{
+  addToSerialLog(logLevel, string);
+  addToSysLog(logLevel, string);
+  addToSDLog(logLevel, string);
+  if (loglevelActiveFor(LOG_TO_WEBLOG, logLevel)) {
+    Logging.add(logLevel, string);
+  }
+}
+
+void addToLogMove(uint8_t logLevel, String&& string)
+{
+  addToSerialLog(logLevel, string);
+  addToSysLog(logLevel, string);
+  addToSDLog(logLevel, string);
+
+  // May clear the string, so call as last one.
+  if (loglevelActiveFor(LOG_TO_WEBLOG, logLevel)) {
+    Logging.add(logLevel, std::move(string));
+  }
+  // Make sure the string may no longer keep up memory
+  string = String();
 }
