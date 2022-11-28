@@ -83,7 +83,7 @@ inline String VariantData::asString() const {
   }
 }
 
-inline bool VariantData::copyFrom(const VariantData& src, MemoryPool* pool) {
+inline bool VariantData::copyFrom(const VariantData &src, MemoryPool *pool) {
   switch (src.type()) {
     case VALUE_IS_ARRAY:
       return toArray().copyFrom(src._content.asCollection, pool);
@@ -91,7 +91,8 @@ inline bool VariantData::copyFrom(const VariantData& src, MemoryPool* pool) {
       return toObject().copyFrom(src._content.asCollection, pool);
     case VALUE_IS_OWNED_STRING: {
       String value = src.asString();
-      return setString(adaptString(value), pool);
+      return storeString(adaptString(value), pool,
+                         getStringStoragePolicy(value));
     }
     case VALUE_IS_OWNED_RAW:
       return storeOwnedRaw(
@@ -104,52 +105,80 @@ inline bool VariantData::copyFrom(const VariantData& src, MemoryPool* pool) {
   }
 }
 
-template <typename TDerived>
-inline VariantRef VariantRefBase<TDerived>::add() const {
-  return VariantRef(getPool(), variantAddElement(getOrCreateData(), getPool()));
-}
-
-template <typename TDerived>
-inline VariantRef VariantRefBase<TDerived>::getVariant() const {
-  return VariantRef(getPool(), getData());
-}
-
-template <typename TDerived>
-inline VariantRef VariantRefBase<TDerived>::getOrCreateVariant() const {
-  return VariantRef(getPool(), getOrCreateData());
-}
-
-template <typename TDerived>
 template <typename T>
 inline typename enable_if<is_same<T, ArrayRef>::value, ArrayRef>::type
-VariantRefBase<TDerived>::to() const {
-  return ArrayRef(getPool(), variantToArray(getOrCreateData()));
+VariantRef::to() const {
+  return ArrayRef(_pool, variantToArray(_data));
 }
 
-template <typename TDerived>
 template <typename T>
 typename enable_if<is_same<T, ObjectRef>::value, ObjectRef>::type
-VariantRefBase<TDerived>::to() const {
-  return ObjectRef(getPool(), variantToObject(getOrCreateData()));
+VariantRef::to() const {
+  return ObjectRef(_pool, variantToObject(_data));
 }
 
-template <typename TDerived>
 template <typename T>
 typename enable_if<is_same<T, VariantRef>::value, VariantRef>::type
-VariantRefBase<TDerived>::to() const {
-  variantSetNull(getOrCreateData());
+VariantRef::to() const {
+  variantSetNull(_data);
   return *this;
 }
 
+inline VariantConstRef VariantConstRef::getElement(size_t index) const {
+  return ArrayConstRef(_data != 0 ? _data->asArray() : 0)[index];
+}
+
+inline VariantRef VariantRef::addElement() const {
+  return VariantRef(_pool, variantAddElement(_data, _pool));
+}
+
+inline VariantRef VariantRef::getElement(size_t index) const {
+  return VariantRef(_pool, _data != 0 ? _data->getElement(index) : 0);
+}
+
+inline VariantRef VariantRef::getOrAddElement(size_t index) const {
+  return VariantRef(_pool, variantGetOrAddElement(_data, index, _pool));
+}
+
+template <typename TChar>
+inline VariantRef VariantRef::getMember(TChar *key) const {
+  return VariantRef(_pool, _data != 0 ? _data->getMember(adaptString(key)) : 0);
+}
+
+template <typename TString>
+inline typename enable_if<IsString<TString>::value, VariantRef>::type
+VariantRef::getMember(const TString &key) const {
+  return VariantRef(_pool, _data != 0 ? _data->getMember(adaptString(key)) : 0);
+}
+
+template <typename TChar>
+inline VariantRef VariantRef::getOrAddMember(TChar *key) const {
+  return VariantRef(_pool, variantGetOrAddMember(_data, key, _pool));
+}
+
+template <typename TString>
+inline VariantRef VariantRef::getOrAddMember(const TString &key) const {
+  return VariantRef(_pool, variantGetOrAddMember(_data, key, _pool));
+}
+
+inline VariantConstRef operator|(VariantConstRef preferedValue,
+                                 VariantConstRef defaultValue) {
+  return preferedValue ? preferedValue : defaultValue;
+}
+
 // Out of class definition to avoid #1560
-template <typename TDerived>
-inline bool VariantRefBase<TDerived>::set(char value) const {
+inline bool VariantRef::set(char value) const {
   return set(static_cast<signed char>(value));
 }
 
-template <typename TDerived>
-inline void convertToJson(const VariantRefBase<TDerived>& src, VariantRef dst) {
-  dst.set(src.template as<VariantConstRef>());
+// TODO: move somewhere else
+template <typename TAdaptedString, typename TCallback>
+bool CopyStringStoragePolicy::store(TAdaptedString str, MemoryPool *pool,
+                                    TCallback callback) {
+  const char *copy = pool->saveString(str);
+  String storedString(copy, str.size(), String::Copied);
+  callback(storedString);
+  return copy != 0;
 }
 
 }  // namespace ARDUINOJSON_NAMESPACE

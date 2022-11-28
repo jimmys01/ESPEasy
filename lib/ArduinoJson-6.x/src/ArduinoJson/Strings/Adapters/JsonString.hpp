@@ -5,32 +5,16 @@
 #pragma once
 
 #include <ArduinoJson/Strings/Adapters/RamString.hpp>
+#include <ArduinoJson/Strings/IsString.hpp>
 #include <ArduinoJson/Strings/String.hpp>
-#include <ArduinoJson/Strings/StringAdapter.hpp>
 
 namespace ARDUINOJSON_NAMESPACE {
 
-class JsonStringAdapter : public SizedRamString {
- public:
-  JsonStringAdapter(const String& s)
-      : SizedRamString(s.c_str(), s.size()), _linked(s.isLinked()) {}
-
-  StringStoragePolicy::LinkOrCopy storagePolicy() {
-    StringStoragePolicy::LinkOrCopy policy = {_linked};
-    return policy;
-  }
-
- private:
-  bool _linked;
-};
+inline SizedRamString adaptString(const String& s) {
+  return SizedRamString(s.c_str(), s.size());
+}
 
 template <>
-struct StringAdapter<String> {
-  typedef JsonStringAdapter AdaptedString;
-
-  static AdaptedString adapt(const String& s) {
-    return AdaptedString(s);
-  }
-};
+struct IsString<String> : true_type {};
 
 }  // namespace ARDUINOJSON_NAMESPACE
