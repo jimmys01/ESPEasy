@@ -1,0 +1,105 @@
+######2023-09-23######
+#######0.04.007#######
+######FLASH INFO######
+BIN file: ESP_Easy_mega_20230714_custom_ESP8266_4M1M.bin
+COM port: (COM6) FTDI USB Serial Port (Port_#0007.Hub_#0001)
+Baud rate: 115200
+######POST FLASH######
+Unit name: 
+Unit number: 
+Admin password: 
+WiFi SSID 1: Daskalakis
+WiFi password 1: 6979951530!
+WiFi SSID 2: 
+WiFi password 2: 
+IP: <DHCP>
+######FLASH LOG######
+[esptool.exe -vv -cd nodemcu -cb 115200 -cp COM6 -ca 0x00000 -cf "C:\Users\JimmysFractal\Documents\GitHub\ESPEasy\dist\bin\ESP_Easy_mega_20230714_custom_ESP8266_4M1M.bin"]
+[23/9/2023 9:36:59 ðì] esptool v0.4.12 - (c) 2014 Ch. Klippel <ck@atelier-klippel.de>
+[23/9/2023 9:36:59 ðì] 	setting board to nodemcu
+[23/9/2023 9:36:59 ðì] 	setting baudrate from 115200 to 115200
+[23/9/2023 9:36:59 ðì] 	setting port from  to COM6
+[23/9/2023 9:36:59 ðì] 	setting address from 0x00000000 to 0x00000000
+[23/9/2023 9:36:59 ðì] 	espcomm_upload_file
+[23/9/2023 9:36:59 ðì] 	espcomm_upload_mem
+[23/9/2023 9:36:59 ðì] 	setting serial port timeouts to 1000 ms
+[23/9/2023 9:36:59 ðì] opening bootloader
+[23/9/2023 9:36:59 ðì] resetting board
+[23/9/2023 9:36:59 ðì] trying to connect
+[23/9/2023 9:36:59 ðì] 	flush start
+[23/9/2023 9:36:59 ðì] 	setting serial port timeouts to 1 ms
+[23/9/2023 9:36:59 ðì] 	setting serial port timeouts to 1000 ms
+[23/9/2023 9:36:59 ðì] 	flush complete
+[23/9/2023 9:36:59 ðì] 	espcomm_send_command: sending command header
+[23/9/2023 9:36:59 ðì] 	espcomm_send_command: sending command payload
+[23/9/2023 9:36:59 ðì] 	read 0, requested 1
+[23/9/2023 9:36:59 ðì] trying to connect
+[23/9/2023 9:36:59 ðì] 	flush start
+[23/9/2023 9:36:59 ðì] 	setting serial port timeouts to 1 ms
+[23/9/2023 9:36:59 ðì] 	setting serial port timeouts to 1000 ms
+[23/9/2023 9:36:59 ðì] 	flush complete
+[23/9/2023 9:36:59 ðì] 	espcomm_send_command: sending command header
+[23/9/2023 9:36:59 ðì] 	espcomm_send_command: sending command payload
+[23/9/2023 9:36:59 ðì] 	read 0, requested 1
+[23/9/2023 9:36:59 ðì] trying to connect
+[23/9/2023 9:36:59 ðì] 	flush start
+[23/9/2023 9:36:59 ðì] 	setting serial port timeouts to 1 ms
+[23/9/2023 9:36:59 ðì] 	setting serial port timeouts to 1000 ms
+[23/9/2023 9:36:59 ðì] 	flush complete
+[23/9/2023 9:36:59 ðì] 	espcomm_send_command: sending command header
+[23/9/2023 9:36:59 ðì] 	espcomm_send_command: sending command payload
+[23/9/2023 9:36:59 ðì] 	read 0, requested 1
+[23/9/2023 9:36:59 ðì] resetting board
+[23/9/2023 9:36:59 ðì] trying to connect
+[23/9/2023 9:36:59 ðì] 	flush start
+[23/9/2023 9:36:59 ðì] 	setting serial port timeouts to 1 ms
+[23/9/2023 9:36:59 ðì] 	setting serial port timeouts to 1000 ms
+[23/9/2023 9:36:59 ðì] 	flush complete
+[23/9/2023 9:36:59 ðì] 	espcomm_send_command: sending command header
+[23/9/2023 9:36:59 ðì] 	espcomm_send_command: sending command payload
+[23/9/2023 9:36:59 ðì] 	read 0, requested 1
+[23/9/2023 9:36:59 ðì] trying to connect
+[23/9/2023 9:36:59 ðì] 	flush start
+[23/9/2023 9:36:59 ðì] 	setting serial port timeouts to 1 ms
+[23/9/2023 9:36:59 ðì] 	setting serial port timeouts to 1000 ms
+[23/9/2023 9:36:59 ðì] 	flush complete
+[23/9/2023 9:36:59 ðì] 	espcomm_send_command: sending command header
+[23/9/2023 9:36:59 ðì] 	espcomm_send_command: sending command payload
+[23/9/2023 9:36:59 ðì] 	read 0, requested 1
+[23/9/2023 9:36:59 ðì] trying to connect
+[23/9/2023 9:36:59 ðì] 	flush start
+[23/9/2023 9:36:59 ðì] 	setting serial port timeouts to 1 ms
+[23/9/2023 9:36:59 ðì] 	setting serial port timeouts to 1000 ms
+[23/9/2023 9:36:59 ðì] 	flush complete
+[23/9/2023 9:36:59 ðì] 	espcomm_send_command: sending command header
+[23/9/2023 9:36:59 ðì] 	espcomm_send_command: sending command payload
+[23/9/2023 9:36:59 ðì] 	read 0, requested 1
+[23/9/2023 9:36:59 ðì] resetting board
+[23/9/2023 9:36:59 ðì] trying to connect
+[23/9/2023 9:36:59 ðì] 	flush start
+[23/9/2023 9:36:59 ðì] 	setting serial port timeouts to 1 ms
+[23/9/2023 9:36:59 ðì] 	setting serial port timeouts to 1000 ms
+[23/9/2023 9:36:59 ðì] 	flush complete
+[23/9/2023 9:36:59 ðì] 	espcomm_send_command: sending command header
+[23/9/2023 9:36:59 ðì] 	espcomm_send_command: sending command payload
+[23/9/2023 9:36:59 ðì] 	read 0, requested 1
+[23/9/2023 9:36:59 ðì] trying to connect
+[23/9/2023 9:36:59 ðì] 	flush start
+[23/9/2023 9:36:59 ðì] 	setting serial port timeouts to 1 ms
+[23/9/2023 9:36:59 ðì] 	setting serial port timeouts to 1000 ms
+[23/9/2023 9:36:59 ðì] 	flush complete
+[23/9/2023 9:36:59 ðì] 	espcomm_send_command: sending command header
+[23/9/2023 9:36:59 ðì] 	espcomm_send_command: sending command payload
+[23/9/2023 9:36:59 ðì] 	read 0, requested 1
+[23/9/2023 9:36:59 ðì] trying to connect
+[23/9/2023 9:36:59 ðì] 	flush start
+[23/9/2023 9:36:59 ðì] 	setting serial port timeouts to 1 ms
+[23/9/2023 9:36:59 ðì] 	setting serial port timeouts to 1000 ms
+[23/9/2023 9:36:59 ðì] 	flush complete
+[23/9/2023 9:36:59 ðì] 	espcomm_send_command: sending command header
+[23/9/2023 9:36:59 ðì] 	espcomm_send_command: sending command payload
+[23/9/2023 9:36:59 ðì] 	read 0, requested 1
+[23/9/2023 9:36:59 ðì] warning: espcomm_sync failed
+[23/9/2023 9:36:59 ðì] error: espcomm_open failed
+[23/9/2023 9:36:59 ðì] error: espcomm_upload_mem failed
+[2023-09-23 09:36:59] STOPPED due to 2 errors! (try reset on the unit, then start a new flash attempt)
