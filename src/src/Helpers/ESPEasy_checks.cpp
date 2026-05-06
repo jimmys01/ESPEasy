@@ -2,7 +2,7 @@
 
 
 #include "../../ESPEasy_common.h"
-#ifndef BUILD_MINIMAL_OTA
+#ifndef LIMIT_BUILD_SIZE
 
 #include "../DataStructs/CRCStruct.h"
 #include "../DataStructs/ControllerSettingsStruct.h"
@@ -11,7 +11,7 @@
 #include "../DataStructs/ExtraTaskSettingsStruct.h"
 #include "../DataStructs/FactoryDefaultPref.h"
 #include "../DataStructs/GpioFactorySettingsStruct.h"
-#include "../DataStructs/LogStruct.h"
+#include "../DataStructs/LogBuffer.h"
 #if FEATURE_ESPEASY_P2P
 #include "../DataStructs/NodeStruct.h"
 #endif
@@ -34,7 +34,8 @@
 #include <cstddef>
 
 #ifdef USES_C013
-#include "../DataStructs/C013_p2p_dataStructs.h"
+#include "../DataStructs/C013_p2p_SensorDataStruct.h"
+#include "../DataStructs/C013_p2p_SensorInfoStruct.h"
 #endif
 
 #ifdef USES_C016
@@ -61,6 +62,12 @@ template <typename ToCheck, std::size_t ExpectedSize, std::size_t RealSize = siz
 void check_size() {
   static_assert(ExpectedSize == RealSize, "");
 }
+//   check_max_size<foo, 1024>();
+// ********************************************************************************
+template <typename ToCheck, std::size_t MaxSize, std::size_t RealSize = sizeof(ToCheck)>
+void check_max_size() {
+  static_assert(MaxSize >= RealSize, "structure size exceeds storeable size!");
+}
 
 
 
@@ -72,60 +79,57 @@ void check_size() {
 // ********************************************************************************
 
 void run_compiletime_checks() {
-  #ifndef LIMIT_BUILD_SIZE
   check_size<CRCStruct,                             204u>();
   check_size<SecurityStruct,                        593u>();
+  check_max_size<SecurityStruct,                    DAT_SECURITYSETTINGS_SIZE>();
   #ifdef ESP32
-  const unsigned int SettingsStructSize = (332 + 84 * TASKS_MAX);
+  constexpr unsigned int SettingsStructSize = (376 + 84 * TASKS_MAX);
   #endif
   #ifdef ESP8266
-  const unsigned int SettingsStructSize = (308 + 84 * TASKS_MAX);
+  constexpr unsigned int SettingsStructSize = (344 + 84 * TASKS_MAX);
   #endif
   #if FEATURE_CUSTOM_PROVISIONING
-  check_size<ProvisioningStruct,                    256u>();  
+  check_size<ProvisioningStruct,                    256u>();
   #endif
   check_size<SettingsStruct,                        SettingsStructSize>();
-  check_size<ControllerSettingsStruct,              820u>();
+  check_max_size<SettingsStruct,                    DAT_BASIC_SETTINGS_SIZE>();
+  check_size<ControllerSettingsStruct,              1012u>();
+  check_max_size<ControllerSettingsStruct,          DAT_CONTROLLER_SIZE>();
   #if FEATURE_NOTIFIER
-  check_size<NotificationSettingsStruct,            996u>();
+  check_size<NotificationSettingsStruct,            1000u>();
+  check_max_size<NotificationSettingsStruct,        DAT_NOTIFICATION_SIZE>();
   #endif // if FEATURE_NOTIFIER
   check_size<ExtraTaskSettingsStruct,               536u>();
-  #if ESP_IDF_VERSION_MAJOR > 3
+  check_max_size<ExtraTaskSettingsStruct,           DAT_TASKS_SIZE>();
+  #ifdef ESP32  // ESP_IDF_VERSION_MAJOR > 3
   // String class has increased with 4 bytes
-  check_size<EventStruct,                           116u>(); // Is not stored
+  check_size<EventStruct,                           160u>(); // Is not stored
   #else
-  check_size<EventStruct,                           96u>(); // Is not stored
+  check_size<EventStruct,                           136u>(); // Is not stored
   #endif
 
-
-  // LogStruct is mainly dependent on the number of lines.
-  // Has to be round up to multiple of 4.
-  #if ESP_IDF_VERSION_MAJOR > 3
-  // String class has increased with 4 bytes
-  const unsigned int LogStructSize = ((13u + 21 * LOG_STRUCT_MESSAGE_LINES) + 3) & ~3;
-  #else
-  const unsigned int LogStructSize = ((13u + 17 * LOG_STRUCT_MESSAGE_LINES) + 3) & ~3;
-  #endif
-  check_size<LogStruct,                             LogStructSize>(); // Is not stored
-  check_size<DeviceStruct,                          8u>(); // Is not stored
-  check_size<ProtocolStruct,                        6u>();
+  check_size<DeviceStruct,                          12u>(); // Is not stored
+  check_size<ProtocolStruct,                        8u>();
   #if FEATURE_NOTIFIER
   check_size<NotificationStruct,                    3u>();
   #endif // if FEATURE_NOTIFIER
   #if FEATURE_ESPEASY_P2P
   check_size<NodeStruct,                            66u>();
   #endif
-  check_size<systemTimerStruct,                     28u>();
+  #if FEATURE_CUSTOM_PROVISIONING
+  check_size<ProvisioningStruct,                    256u>();
+  #endif
+  check_size<systemTimerStruct,                     32u>();
   check_size<RTCStruct,                             32u>();
   check_size<portStatusStruct,                      6u>();
   check_size<ResetFactoryDefaultPreference_struct,  4u>();
   check_size<GpioFactorySettingsStruct,             18u>();
   #ifdef USES_C013
-  check_size<C013_SensorInfoStruct,                 137u>();
-  check_size<C013_SensorDataStruct,                 24u>();
+  check_size<C013_SensorInfoStruct,                 233u>();
+  check_size<C013_SensorDataStruct,                 40u>(); 
   #endif
   #ifdef USES_C016
-  check_size<C016_queue_element,                    24u>();
+  check_size<C016_binary_element,                   24u>();
   #endif
 
 
@@ -155,7 +159,18 @@ void run_compiletime_checks() {
 
     const unsigned int md5_offset = ProgmemMd5_offset + 16;
     static_assert(md5_offset == offsetof(SecurityStruct, md5), "");
+
+    #if FEATURE_CUSTOM_PROVISIONING
+    const unsigned int prov_pass_offset = 62u;
+    static_assert(prov_pass_offset == offsetof(ProvisioningStruct, pass), "");
+
+
+    #endif
   }
+
+//  constexpr size_t offset_WireClockStretchLimit = offsetof(SettingsStruct, WireClockStretchLimit);
+  constexpr size_t offset_ConnectionFailuresThreshold = offsetof(SettingsStruct, ConnectionFailuresThreshold);
+  static_assert(184 == offset_ConnectionFailuresThreshold, "");
 
 
   static_assert(192u == offsetof(SettingsStruct, Protocol), "");
@@ -163,17 +178,19 @@ void run_compiletime_checks() {
   static_assert(198u == offsetof(SettingsStruct, TaskDeviceNumber), "NOTIFICATION_MAX has changed?");
 
   // All settings related to N_TASKS
-  static_assert((200 + TASKS_MAX) == offsetof(SettingsStruct, OLD_TaskDeviceID), ""); // 32-bit alignment, so offset of 2 bytes.
-  static_assert((200 + (67 * TASKS_MAX)) == offsetof(SettingsStruct, ControllerEnabled), ""); 
+  static_assert((232 + TASKS_MAX) == offsetof(SettingsStruct, OLD_TaskDeviceID), ""); // 32-bit alignment, so offset of 2 bytes.
+  static_assert((200 + (67 * TASKS_MAX)) == offsetof(SettingsStruct, ControllerEnabled), "");
 
   // Used to compute true offset.
   //const size_t offset = offsetof(SettingsStruct, ControllerEnabled);
   //check_size<SettingsStruct, offset>();
 
-  #endif
-}
 
-#ifndef LIMIT_BUILD_SIZE
+  // ESP8266 toolchain does not support constexpr macros in struct defines
+  // to determine nr of bits in a struct.
+  static_assert(GPIO_DIRECTION_NR_BITS== NR_BITS(static_cast<uint8_t>(gpio_direction::gpio_direction_MAX)), "Correct GPIO_DIRECTION_NR_BITS");
+
+}
 String ReportOffsetErrorInStruct(const String& structname, size_t offset) {
   String error;
   if (error.reserve(48 + structname.length())) {
@@ -183,14 +200,13 @@ String ReportOffsetErrorInStruct(const String& structname, size_t offset) {
   }
   return error;
 }
-#endif
 
 /*********************************************************************************************\
 *  Analyze SettingsStruct and report inconsistencies
 *  Not a member function to be able to use the F-macro
 \*********************************************************************************************/
 bool SettingsCheck(String& error) {
-  error = String();
+  free_string(error);
   #ifndef LIMIT_BUILD_SIZE
 #ifdef esp8266
   size_t offset = offsetof(SettingsStruct, ResetFactoryDefaultPreference);
@@ -215,13 +231,13 @@ bool SettingsCheck(String& error) {
 
 String checkTaskSettings(taskIndex_t taskIndex) {
   String err = LoadTaskSettings(taskIndex);
-  #ifndef LIMIT_BUILD_SIZE
+  #if !defined(PLUGIN_BUILD_MINIMAL_OTA) && !defined(ESP8266_1M)
   if (err.length() > 0) return err;
   if (!ExtraTaskSettings.checkUniqueValueNames()) {
     return F("Use unique value names");
   }
   if (!ExtraTaskSettings.checkInvalidCharInNames()) {
-    return F("Invalid character in name. Do not use ',-+/*=^%!#[]{}()' or space.");
+    return concat(F("Invalid character in name. Do not use space or '"), ExtraTaskSettingsStruct::getInvalidCharsForNames()) + '\'';
   }
   String deviceName = ExtraTaskSettings.TaskDeviceName;
   NumericalType detectedType;

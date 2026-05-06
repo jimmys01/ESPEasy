@@ -2,7 +2,7 @@
 #define HELPERS_MSECTIMERHANDLERSTRUCT_H
 
 
-#include <Arduino.h>
+#include "../../ESPEasy_common.h"
 #include <list>
 
 #include "../DataStructs/timer_id_couple.h"
@@ -49,8 +49,8 @@ private:
   unsigned long max_queue_length;
 
   // Compute idle system time
-  uint64_t last_exec_time_usec;
-  uint64_t total_idle_time_usec;
+  uint32_t last_exec_time_usec;
+  uint32_t total_idle_time_usec;
   uint32_t last_log_start_time;
   float         idle_time_pct;
   bool          is_idle;

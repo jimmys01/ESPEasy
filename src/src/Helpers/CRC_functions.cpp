@@ -28,7 +28,7 @@ int calc_CRC16(const char *ptr, int count)
       else {
         crc = crc << 1;
       }
-    } while(--i);
+    } while (--i);
   }
   return crc;
 }
@@ -55,4 +55,54 @@ uint32_t calc_CRC32(const uint8_t *data, size_t length) {
     }
   }
   return crc;
+}
+
+uint8_t calc_CRC8(const uint8_t *data, size_t length)
+{
+  /*
+   *	Name           : CRC-8
+   * Polynomial     : 0x31 (x8 + x5 + x4 + 1)
+   * Initialization : 0xFF
+   * Reflect input  : False
+   * Reflect output : False
+   * Final          : XOR 0x00
+   *	Example        : calc_CRC8( *(0xBE, 0xEF)) == 0x92 should be true
+   */
+  uint8_t crc = 0xFF;
+
+  // for (uint8_t bytenr = 0; bytenr < 2; ++bytenr) {
+  if (data != nullptr) {
+    while (length--) {
+      uint8_t c = *data++;
+      crc ^= c;
+
+      for (uint8_t i = 0; i < 8; ++i) {
+        crc = crc & 0x80 ? (crc << 1) ^ 0x31 : crc << 1;
+      }
+    }
+  }
+  return crc;
+}
+
+bool calc_CRC8(uint8_t MSB, uint8_t LSB, uint8_t CRC)
+{
+  /*
+   *	Name           : CRC-8
+   * Polynomial     : 0x31 (x8 + x5 + x4 + 1)
+   * Initialization : 0xFF
+   * Reflect input  : False
+   * Reflect output : False
+   * Final          : XOR 0x00
+   *	Example        : CRC8( 0xBE, 0xEF, 0x92) should be true
+   */
+  uint8_t crc = 0xFF;
+
+  for (uint8_t bytenr = 0; bytenr < 2; ++bytenr) {
+    crc ^= (bytenr == 0) ? MSB : LSB;
+
+    for (uint8_t i = 0; i < 8; ++i) {
+      crc = crc & 0x80 ? (crc << 1) ^ 0x31 : crc << 1;
+    }
+  }
+  return crc == CRC;
 }

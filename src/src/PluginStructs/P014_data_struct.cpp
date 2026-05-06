@@ -16,9 +16,7 @@ bool P014_data_struct::startInit(uint8_t i2caddr)
   uint8_t ret = I2C_wakeup(i2caddr);
   if (ret){
     if (loglevelActiveFor(LOG_LEVEL_ERROR)){
-      String log = F("SI70xx : Not available at address: ");
-      log += String(i2caddr, HEX);
-      addLog(LOG_LEVEL_ERROR, log);
+      addLogMove(LOG_LEVEL_ERROR, strformat(F("SI70xx : Not available at address: %x"), i2caddr));
     }
     return false;
   }
@@ -26,9 +24,7 @@ bool P014_data_struct::startInit(uint8_t i2caddr)
   //reset the device
   if (!softReset(i2caddr)){
     if (loglevelActiveFor(LOG_LEVEL_ERROR)){
-      String log = F("SI70xx : Not able to reset: ");
-      log += String(i2caddr, HEX);
-      addLog(LOG_LEVEL_ERROR, log);
+      addLogMove(LOG_LEVEL_ERROR, strformat(F("SI70xx : Not able to reset: %x"), i2caddr));
     }
     return false;
   }
@@ -44,20 +40,14 @@ bool P014_data_struct::finalizeInit(uint8_t i2caddr, uint8_t resolution)
   int8_t ret = readSerialNumber(i2caddr); //this will also set the device ID
   if (ret){
       if (loglevelActiveFor(LOG_LEVEL_ERROR)){
-          String log = F("SI70xx : Not able to read SN: addr=0x");
-          log += String(i2caddr, HEX);
-          log += F(" err=");
-          log += String(ret, DEC);
-          addLog(LOG_LEVEL_ERROR, log);
+        addLogMove(LOG_LEVEL_ERROR, strformat(F("SI70xx : Not able to read SN: addr=0x%x err=%d"), i2caddr, ret));
       }
     //return false;
   }
 
   //at this point we know the chip_id
   if (loglevelActiveFor(LOG_LEVEL_INFO)){
-    String log = F("P014: chip_id=");
-    log += String(chip_id, DEC);
-    addLog(LOG_LEVEL_INFO, log);
+    addLogMove(LOG_LEVEL_INFO, strformat(F("P014: chip_id=%d"), chip_id));
   }
   if (chip_id == CHIP_ID_SI7013){
     if (!I2C_write8_reg(i2caddr,SI7013_WRITE_REG2, SI7013_REG2_DEFAULT )){
@@ -106,9 +96,7 @@ bool P014_data_struct::update(uint8_t i2caddr, uint8_t resolution, uint8_t filte
 
         if (I2C_wakeup(i2caddr)!=0){
           if (loglevelActiveFor(LOG_LEVEL_ERROR)){
-            String log = F("SI70xx : Not available at address: ");
-            log += String(i2caddr, HEX);
-            addLog(LOG_LEVEL_ERROR, log);
+            addLogMove(LOG_LEVEL_ERROR, strformat(F("SI70xx : Not available at address: %x"), i2caddr));
           }
           errCount++;
           return false;
@@ -290,7 +278,7 @@ uint8_t P014_data_struct::checkCRC(uint16_t data, uint8_t check)
 
   // Operate on only 16 positions of max 24.
   // The remaining 8 are our remainder and should be zero when we're done.
-  for (uint8_t i = 0; i < 16; i++) {
+  for (uint8_t i = 0; i < 16; ++i) {
     // Check if there is a one in the left position
     if (remainder & (uint32_t)1 << (23 - i)) {
       remainder ^= divisor;
@@ -326,9 +314,7 @@ bool P014_data_struct::setResolution(uint8_t i2caddr, uint8_t resolution)
 
   if (!ok) {
       if (loglevelActiveFor(LOG_LEVEL_ERROR)){
-        String log = F("SI70xx : Unable to set resolution: ");
-        log += String(i2caddr, HEX);
-        addLog(LOG_LEVEL_ERROR, log);
+        addLogMove(LOG_LEVEL_ERROR, strformat(F("SI70xx : Unable to set resolution: %x"), i2caddr));
       }
   }
 
@@ -358,9 +344,7 @@ int8_t P014_data_struct::readRevision(uint8_t i2caddr) {
       Wire.read(); //ignore CRC
 
       if (loglevelActiveFor(LOG_LEVEL_INFO)){
-        String log = F("SI7013 : revision=");
-        log += String(rev,HEX);
-        addLog(LOG_LEVEL_INFO,log);
+        addLogMove(LOG_LEVEL_INFO, strformat(F("SI7013 : revision=%x"), rev));
       }
       
       return 0;
@@ -417,11 +401,7 @@ int8_t P014_data_struct::readSerialNumber(uint8_t i2caddr) {
   Wire.read(); //ignore CRC
 
   if (loglevelActiveFor(LOG_LEVEL_INFO)){
-    String log = F("SI7013 : sn=");
-    log += String(sernum_a,HEX);
-    log += F("-");
-    log += String(sernum_b,HEX);
-    addLog(LOG_LEVEL_INFO,log);
+    addLogMove(LOG_LEVEL_INFO, strformat(F("SI7013 : sn=%x-%x"), sernum_a, sernum_b));
   }
   return 0; //ok
 }
@@ -444,7 +424,7 @@ bool P014_data_struct::enablePowerForADC(uint8_t i2caddr){
     
   
   if (i2caddr == SI7013_I2C_ADDRESS_AD0_1){
-    ok = I2C_write8_reg(i2caddr,SI7013_WRITE_REG2, (reg & B11111000) | (2+4+64) );//set last three bits (VIN bufered, Vref=VDD, VOUT=GND) and No-Hold for bit 6
+    ok = I2C_write8_reg(i2caddr,SI7013_WRITE_REG2, (reg & 0b11111000) | (2+4+64) );//set last three bits (VIN bufered, Vref=VDD, VOUT=GND) and No-Hold for bit 6
   }else{
     ok = I2C_write8_reg(i2caddr,SI7013_WRITE_REG2,reg | (1+2+4+64) );//set last three bits to 1 (VIN bufered, Vref=VDD, VOUT=VDD) and No-Hold for bit 6
   }
@@ -475,7 +455,7 @@ bool P014_data_struct::disablePowerForADC(uint8_t i2caddr){
   if (i2caddr == SI7013_I2C_ADDRESS_AD0_1){
     ok = I2C_write8_reg(i2caddr,SI7013_WRITE_REG2,reg | (1+2+4+64) );//set last three bits to 1 (VIN bufered, Vref=VDD, VOUT=VDD) and No-Hold for bit 6
   }else{
-    ok = I2C_write8_reg(i2caddr,SI7013_WRITE_REG2, (reg & B11111000) | (2+4+64) );//set last three bits (VIN bufered, Vref=VDD, VOUT=GND) and No-Hold for bit 6
+    ok = I2C_write8_reg(i2caddr,SI7013_WRITE_REG2, (reg & 0b11111000) | (2+4+64) );//set last three bits (VIN bufered, Vref=VDD, VOUT=GND) and No-Hold for bit 6
   }
   if (!ok){
     addLog(LOG_LEVEL_ERROR, F("SI7013: Could not write REG2!"));

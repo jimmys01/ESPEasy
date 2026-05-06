@@ -18,13 +18,14 @@
 // #######################################################################################################
 
 // Changelog:
+// 2023-04-28 @iz8mbw: Rename sensor to SHT3x from SHT30/31/35
 // 2021-06-12 @tonhuisman: Add temperature offset setting, with humidity compensation method 'borrowed' from BME280 sensor
 // 2020-??    @TD-er: Maitenance updates
 // 2017-07-18 @JK-de: Plugin adaption for ESPEasy 2.0
 
 # define PLUGIN_068
 # define PLUGIN_ID_068         68
-# define PLUGIN_NAME_068       "Environment - SHT30/31/35"
+# define PLUGIN_NAME_068       "Environment - SHT3x"
 # define PLUGIN_VALUENAME1_068 "Temperature"
 # define PLUGIN_VALUENAME2_068 "Humidity"
 
@@ -41,18 +42,15 @@ boolean Plugin_068(uint8_t function, struct EventStruct *event, String& string)
   {
     case PLUGIN_DEVICE_ADD:
     {
-      Device[++deviceCount].Number           = PLUGIN_ID_068;
-      Device[deviceCount].Type               = DEVICE_TYPE_I2C;
-      Device[deviceCount].VType              = Sensor_VType::SENSOR_TYPE_TEMP_HUM;
-      Device[deviceCount].Ports              = 0;
-      Device[deviceCount].PullUpOption       = false;
-      Device[deviceCount].InverseLogicOption = false;
-      Device[deviceCount].FormulaOption      = true;
-      Device[deviceCount].ValueCount         = 2;
-      Device[deviceCount].SendDataOption     = true;
-      Device[deviceCount].TimerOption        = true;
-      Device[deviceCount].GlobalSyncOption   = true;
-      Device[deviceCount].PluginStats        = true;
+      auto& dev = Device[++deviceCount];
+      dev.Number         = PLUGIN_ID_068;
+      dev.Type           = DEVICE_TYPE_I2C;
+      dev.VType          = Sensor_VType::SENSOR_TYPE_TEMP_HUM;
+      dev.FormulaOption  = true;
+      dev.ValueCount     = 2;
+      dev.SendDataOption = true;
+      dev.TimerOption    = true;
+      dev.PluginStats    = true;
       break;
     }
 
@@ -82,11 +80,22 @@ boolean Plugin_068(uint8_t function, struct EventStruct *event, String& string)
       break;
     }
 
+    # if FEATURE_I2C_GET_ADDRESS
+    case PLUGIN_I2C_GET_ADDRESS:
+    {
+      event->Par1 = PCONFIG(0);
+      success     = true;
+      break;
+    }
+    # endif // if FEATURE_I2C_GET_ADDRESS
+
     case PLUGIN_WEBFORM_LOAD:
     {
-      addFormNumericBox(F("Temperature offset"), F("p068_tempoffset"), PCONFIG(1));
+      addFormNumericBox(F("Temperature offset"), F("tempoffset"), PCONFIG(1));
       addUnit(F("x 0.1C"));
+      # ifndef BUILD_NO_DEBUG
       addFormNote(F("Offset in units of 0.1 degree Celsius"));
+      # endif // ifndef BUILD_NO_DEBUG
       success = true;
       break;
     }
@@ -94,7 +103,7 @@ boolean Plugin_068(uint8_t function, struct EventStruct *event, String& string)
     case PLUGIN_WEBFORM_SAVE:
     {
       PCONFIG(0) = getFormItemInt(F("i2c_addr"));
-      PCONFIG(1) = getFormItemInt(F("p068_tempoffset"));
+      PCONFIG(1) = getFormItemInt(F("tempoffset"));
 
       success = true;
       break;
@@ -102,8 +111,7 @@ boolean Plugin_068(uint8_t function, struct EventStruct *event, String& string)
 
     case PLUGIN_INIT:
     {
-      initPluginTaskData(event->TaskIndex, new (std::nothrow) P068_SHT3X(PCONFIG(0)));
-      success = true;
+      success = initPluginTaskData(event->TaskIndex, new (std::nothrow) P068_SHT3X(PCONFIG(0)));
       break;
     }
 
@@ -118,20 +126,12 @@ boolean Plugin_068(uint8_t function, struct EventStruct *event, String& string)
 
       sht3x->tmpOff = PCONFIG(1) / 10.0f;
       sht3x->readFromSensor();
-      UserVar[event->BaseVarIndex + 0] = sht3x->tmp;
-      UserVar[event->BaseVarIndex + 1] = sht3x->hum;
+      UserVar.setFloat(event->TaskIndex, 0, sht3x->tmp);
+      UserVar.setFloat(event->TaskIndex, 1, sht3x->hum);
 
       if (loglevelActiveFor(LOG_LEVEL_INFO)) {
-        String log;
-
-        if (log.reserve(25)) {
-          log  = F("SHT3x: Temperature: ");
-          log += formatUserVarNoCheck(event->TaskIndex, 0);
-          addLogMove(LOG_LEVEL_INFO, log);
-          log  = F("SHT3x: Humidity: ");
-          log += formatUserVarNoCheck(event->TaskIndex, 1);
-          addLogMove(LOG_LEVEL_INFO, log);
-        }
+        addLogMove(LOG_LEVEL_INFO, concat(F("SHT3x: Temperature: "), formatUserVarNoCheck(event, 0)));
+        addLogMove(LOG_LEVEL_INFO, concat(F("SHT3x: Humidity: "), formatUserVarNoCheck(event, 1)));
       }
       success = true;
       break;

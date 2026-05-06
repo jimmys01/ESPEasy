@@ -9,7 +9,7 @@
 // ********************************************************************************
 // Interface for Sending to Controllers
 // ********************************************************************************
-void sendData(struct EventStruct *event);
+void sendData(struct EventStruct *event, bool sendEvents = true);
 
 bool validUserVar(struct EventStruct *event);
 
@@ -29,7 +29,14 @@ void MQTTDisconnect();
 /*********************************************************************************************\
 * Connect to MQTT message broker
 \*********************************************************************************************/
+#if FEATURE_MQTT_CONNECT_BACKGROUND
+bool MQTTConnectInBackground(controllerIndex_t controller_idx,
+                             bool              reportOnly);
+#endif // if FEATURE_MQTT_CONNECT_BACKGROUND
+
 bool MQTTConnect(controllerIndex_t controller_idx);
+
+void MQTTparseSystemVariablesAndSubscribe(String subscribeTo);
 
 String getMQTTclientID(const ControllerSettingsStruct& ControllerSettings);
 
@@ -52,18 +59,18 @@ String getLWT_messageDisconnect(const ControllerSettingsStruct& ControllerSettin
 \*********************************************************************************************/
 void SendStatusOnlyIfNeeded(struct EventStruct *event, bool param1, uint32_t key, const String& param2, int16_t param3);
 
-bool SourceNeedsStatusUpdate(EventValueSource::Enum eventSource);
-
 void SendStatus(struct EventStruct *event, const __FlashStringHelper * status);
 void SendStatus(struct EventStruct *event, const String& status);
 
 #if FEATURE_MQTT
+controllerIndex_t firstEnabledMQTT_ControllerIndex();
+
 bool MQTT_queueFull(controllerIndex_t controller_idx);
 
-bool MQTTpublish(controllerIndex_t controller_idx, taskIndex_t taskIndex,  const char *topic, const char *payload, bool retained);
+bool MQTTpublish(controllerIndex_t controller_idx, taskIndex_t taskIndex,  const char *topic, const char *payload, bool retained, bool callbackTask = false);
 
 // Publish using the move operator for topic and message
-bool MQTTpublish(controllerIndex_t controller_idx, taskIndex_t taskIndex,  String&& topic, String&& payload, bool retained);
+bool MQTTpublish(controllerIndex_t controller_idx, taskIndex_t taskIndex,  String&& topic, String&& payload, bool retained, bool callbackTask = false);
 
 
 /*********************************************************************************************\
@@ -72,18 +79,21 @@ bool MQTTpublish(controllerIndex_t controller_idx, taskIndex_t taskIndex,  Strin
 void MQTTStatus(struct EventStruct *event, const String& status);
 #endif //if FEATURE_MQTT
 
+# if FEATURE_MQTT_TLS || FEATURE_HTTP_TLS
+bool GetTLSfingerprint(String& fp);
+
+bool GetTLS_Certificate(String& cert, bool caRoot);
+
+#endif
 
 
-/*********************************************************************************************\
- * send all sensordata
-\*********************************************************************************************/
-// void SensorSendAll();
 
 
 /*********************************************************************************************\
  * send specific sensor task data, effectively calling PluginCall(PLUGIN_READ...)
 \*********************************************************************************************/
-void SensorSendTask(taskIndex_t TaskIndex);
+void SensorSendTask(struct EventStruct *event, unsigned long timestampUnixTime = 0);
+void SensorSendTask(struct EventStruct *event, unsigned long timestampUnixTime, unsigned long lasttimer);
 
 
 #endif

@@ -6,17 +6,19 @@
 
 # include "../../ESPEasy-Globals.h"
 
-# include <SPI.h>
 # include "IthoCC1101.h"
 # include "IthoPacket.h"
 
-# define P118_DEBUG_LOG         // Enable for some (extra) logging
-# define P118_FEATURE_ORCON   1 // Enable use of Orcon commands
+# define P118_DEBUG_LOG          // Enable for some (extra) logging
+# ifndef P118_FEATURE_ORCON
+#  define P118_FEATURE_ORCON   1 // Enable use of Orcon commands
+# endif // ifndef P118_FEATURE_ORCON
 
-# if defined(LIMIT_BUILD_SIZE) && defined(P118_DEBUG_LOG)
+# if (defined(LIMIT_BUILD_SIZE) || defined(BUILD_NO_DEBUG)) && defined(P118_DEBUG_LOG)
 #  undef P118_DEBUG_LOG
-# endif // if defined(LIMIT_BUILD_SIZE) && defined(P118_DEBUG_LOG)
+# endif // if (defined(LIMIT_BUILD_SIZE) || defined(BUILD_NO_DEBUG)) && defined(P118_DEBUG_LOG)
 # ifdef LIMIT_BUILD_SIZE
+
 // #  if P118_FEATURE_ORCON
 // #   undef P118_FEATURE_ORCON
 // #   define P118_FEATURE_ORCON   0
@@ -58,10 +60,10 @@ struct PLUGIN_118_ExtraSettingsStruct {
 struct P118_data_struct : public PluginTaskData_base {
 public:
 
-  P118_data_struct(int8_t csPin,
-                   int8_t irqPin,
-                   bool   logData,
-                   bool   rfLog);
+  P118_data_struct(int8_t  csPin,
+                   int8_t  irqPin,
+                   bool    logData,
+                   bool    rfLog);
 
   P118_data_struct() = delete;
   virtual ~P118_data_struct();
@@ -102,10 +104,10 @@ private:
   int  _OldLastIDindex = 0;
   bool _InitRunned     = false;
 
-  int8_t _csPin  = -1;
-  int8_t _irqPin = -1;
-  bool   _log    = false;
-  bool   _rfLog  = false;
+  int8_t  _csPin  = -1;
+  int8_t  _irqPin = -1;
+  bool    _log    = false;
+  bool    _rfLog  = false;
 
   PLUGIN_118_ExtraSettingsStruct _ExtraSettings;
 

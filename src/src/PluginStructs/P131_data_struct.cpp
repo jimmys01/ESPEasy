@@ -10,7 +10,6 @@ const __FlashStringHelper* P131_CommandTrigger_toString(P131_CommandTrigger cmd)
   switch (cmd) {
     case P131_CommandTrigger::neomatrix: return F("neomatrix");
     case P131_CommandTrigger::neo: return F("neo");
-    case P131_CommandTrigger::MAX: break;
   }
   return F("None");
 }
@@ -32,10 +31,12 @@ P131_data_struct::P131_data_struct(uint8_t             matrixWidth,
                                    uint8_t             brightness,
                                    uint8_t             maxbright,
                                    uint16_t            fgcolor,
-                                   uint16_t            bgcolor)
+                                   uint16_t            bgcolor,
+                                   const uint8_t       defaultFontId)
   :  _matrixWidth(matrixWidth),  _matrixHeight(matrixHeight),  _tileWidth(tileWidth),  _tileHeight(tileHeight),
   _pin(pin),  _matrixType(matrixType),  _ledType(ledType), _rotation(rotation), _fontscaling(fontscaling), _textmode(textmode),
-  _commandTrigger(commandTrigger), _brightness(brightness), _maxbright(maxbright), _fgcolor(fgcolor), _bgcolor(bgcolor) {
+  _commandTrigger(commandTrigger), _brightness(brightness), _maxbright(maxbright), _fgcolor(fgcolor), _bgcolor(bgcolor),
+  _defaultFontId(defaultFontId) {
   _commandTrigger.toLowerCase();
   _commandTriggerCmd  = _commandTrigger;
   _commandTriggerCmd += F("cmd");
@@ -60,7 +61,9 @@ bool P131_data_struct::plugin_init(struct EventStruct *event) {
   bool success = false;
 
   if (!isInitialized()) {
+    # ifndef BUILD_NO_DEBUG
     addLog(LOG_LEVEL_INFO, F("NEOMATRIX: Init start."));
+    # endif // ifndef BUILD_NO_DEBUG
     matrix = new (std::nothrow) Adafruit_NeoMatrix(_matrixWidth,
                                                    _matrixHeight,
                                                    _tileWidth,
@@ -95,9 +98,9 @@ bool P131_data_struct::plugin_init(struct EventStruct *event) {
       log += _ypix;
       addLogMove(LOG_LEVEL_INFO, log);
     }
-    # endif // ifndef BUILD_NO_DEBUG
   } else {
     addLog(LOG_LEVEL_INFO, F("NEOMATRIX: Init failed."));
+    # endif // ifndef BUILD_NO_DEBUG
   }
 
   if (isInitialized()) {
@@ -111,12 +114,15 @@ bool P131_data_struct::plugin_init(struct EventStruct *event) {
                                                       _fgcolor,
                                                       _bgcolor,
                                                       true,
-                                                      _textBackFill);
+                                                      _textBackFill,
+                                                      _defaultFontId);
 
     success = (nullptr != gfxHelper);
 
     if (success) {
+      gfxHelper->initialize();
       gfxHelper->setRotation(_rotation);
+      matrix->begin();
       matrix->setBrightness(std::min(_maxbright, _brightness)); // Set brightness, so we don't get blinded by the light
       matrix->fillScreen(_bgcolor);                             // fill screen with black color
       matrix->show();                                           // Update the display
@@ -144,12 +150,16 @@ bool P131_data_struct::plugin_init(struct EventStruct *event) {
       // Load
       loadContent(event);
 
+      for (uint8_t x = 0; x < P131_Nlines && !stringsHasContent; x++) {
+        stringsHasContent = !strings[x].isEmpty();
+      }
+
       // Setup initial scroll position
       for (uint8_t x = 0; x < P131_CONFIG_TILE_HEIGHT; x++) {
         content[x].pixelPos = 0;
 
         if (content[x].active) {
-          String   tmpString = parseStringKeepCase(strings[x], 1);
+          String   tmpString = parseStringKeepCaseNoTrim(strings[x], 1);
           String   newString = AdaGFXparseTemplate(tmpString, _textcols, gfxHelper);
           uint16_t h;
           content[x].length = gfxHelper->getTextSize(newString, h);
@@ -230,7 +240,7 @@ void P131_data_struct::initialize_content(struct EventStruct *event,
   content[x].startBlank  = bitRead(optBits, P131_OPTBITS_STARTBLANK) == 0;      // Inverted
   content[x].stepWidth   = get4BitFromUL(optBits, P131_OPTBITS_SCROLLSTEP) + 1; // Add offset once
   opts                   = parseString(strings[x], 3);
-  int speed = 0;
+  int32_t speed = 0;
 
   validIntFromString(opts, speed);
   content[x].speed = speed;
@@ -243,13 +253,7 @@ bool P131_data_struct::plugin_read(struct EventStruct *event) {
   if (isInitialized() && !_splashState) {
     loadContent(event);
 
-    bool hasContent = false;
-
-    for (uint8_t x = 0; x < P131_CONFIG_TILE_HEIGHT && !hasContent; x++) {
-      hasContent = !parseStringKeepCase(strings[x], 1).isEmpty();
-    }
-
-    if (hasContent) {
+    if (stringsHasContent) {
       display_content(event);
     }
   }
@@ -264,8 +268,8 @@ void P131_data_struct::display_content(struct EventStruct *event,
                                        bool                scrollOnly,
                                        uint8_t             line) {
   if (isInitialized() && (nullptr != gfxHelper)) {
-    int16_t yPos   = 0;
-    bool    useVal = gfxHelper->getValidation();
+    int16_t yPos      = 0;
+    const bool useVal = gfxHelper->getValidation();
     gfxHelper->setValidation(false); // Ignore validation to enable scrolling
 
     uint8_t x     = 0;
@@ -279,7 +283,7 @@ void P131_data_struct::display_content(struct EventStruct *event,
     for (; x < x_end; x++) {
       if (!scrollOnly ||
           (scrollOnly && content[x].active)) {
-        String   tmpString = parseStringKeepCase(strings[x], 1);
+        String   tmpString = parseStringKeepCaseNoTrim(strings[x], 1);
         String   newString = AdaGFXparseTemplate(tmpString, _textcols, gfxHelper);
         uint16_t h;
         content[x].length = gfxHelper->getTextSize(newString, h);
@@ -306,11 +310,11 @@ void P131_data_struct::display_content(struct EventStruct *event,
                                _bgcolor);
             }
 
-            if (!content[x].rightScroll && (content[x].pixelPos + content[x].length < _xpix) && (content[x].stepWidth > 1)) {
+            if (!content[x].rightScroll && (content[x].pixelPos + content[x].length < _xpix) && (content[x].stepWidth >= 1)) {
               // Clear right from text
-              matrix->fillRect(content[x].pixelPos + content[x].length + 1,
+              matrix->fillRect(content[x].pixelPos + content[x].length,
                                yPos,
-                               content[x].stepWidth - 1,
+                               content[x].stepWidth,
                                h,
                                _bgcolor);
             }
@@ -374,7 +378,7 @@ bool P131_data_struct::plugin_write(struct EventStruct *event, const String& str
       int16_t x   = event->Par2 - 1;
       success = true;
 
-      if (sub.equals(F("clear"))) {
+      if (equals(sub, F("clear"))) {
         matrix->fillScreen(_bgcolor);
       } else if (sub.startsWith(F("bright")) && (event->Par2 >= 0) && (event->Par2 <= 255)) {
         if (parseString(string, 3).isEmpty()) {                     // No argument, then
@@ -382,15 +386,15 @@ bool P131_data_struct::plugin_write(struct EventStruct *event, const String& str
         } else {
           matrix->setBrightness(std::min(_maxbright, static_cast<uint8_t>(event->Par2)));
         }
-      } else if (sub.equals(F("settext"))
+      } else if (equals(sub, F("settext"))
                  && ((event->Par2 > 0) && (event->Par2 <= P131_CONFIG_TILE_HEIGHT))) { // line
         String tmpString = parseStringToEnd(strings[x], 2);                            // settings to be transferred
         strings[x]  = wrapWithQuotesIfContainsParameterSeparatorChar(parseStringToEndKeepCase(string, 4));
         strings[x] += ',';
         strings[x] += tmpString;
-      } else if ((sub.equals(F("setscroll")) ||                                     // neomatrixcmd,setscroll,<line>,0|1
-                  sub.equals(F("setempty")) ||                                      // neomatrixcmd,setempty,<line>,0|1
-                  sub.equals(F("setright"))                                         // neomatrixcmd,setright,<line>,0|1
+      } else if ((equals(sub, F("setscroll")) ||                                    // neomatrixcmd,setscroll,<line>,0|1
+                  equals(sub, F("setempty")) ||                                     // neomatrixcmd,setempty,<line>,0|1
+                  equals(sub, F("setright"))                                        // neomatrixcmd,setright,<line>,0|1
                   )
                  && ((event->Par2 > 0) && (event->Par2 <= P131_CONFIG_TILE_HEIGHT)) // line
                  && ((event->Par3 >= 0) && (event->Par3 <= 1))) {                   // on/off
@@ -413,7 +417,7 @@ bool P131_data_struct::plugin_write(struct EventStruct *event, const String& str
         strings[x] += optBits;
         strings[x] += ',';
         strings[x] += tmpString3;
-      } else if (sub.equals(F("setstep"))                                            // neomatrixcmd,setstep,<line>,1..16
+      } else if (equals(sub, F("setstep"))                                           // neomatrixcmd,setstep,<line>,1..16
                  && ((event->Par2 > 0) && (event->Par2 <= P131_CONFIG_TILE_HEIGHT))  // line
                  && ((event->Par3 > 0) && (event->Par3 <= P131_MAX_SCROLL_STEPS))) { // 1..16
         String   tmpString1 = parseStringKeepCase(strings[x], 1);                    // settings to be transferred
@@ -428,7 +432,7 @@ bool P131_data_struct::plugin_write(struct EventStruct *event, const String& str
         strings[x] += optBits;
         strings[x] += ',';
         strings[x] += tmpString3;
-      } else if (sub.equals(F("setspeed"))                                           // neomatrixcmd,setspeed,<line>,1..600
+      } else if (equals(sub, F("setspeed"))                                          // neomatrixcmd,setspeed,<line>,1..600
                  && ((event->Par2 > 0) && (event->Par2 <= P131_CONFIG_TILE_HEIGHT))  // line
                  && ((event->Par3 > 0) && (event->Par3 <= P131_MAX_SCROLL_SPEED))) { // 1..600
         String tmpString1 = parseStringKeepCase(strings[x], 1);                      // settings to be transferred
@@ -478,6 +482,23 @@ bool P131_data_struct::plugin_write(struct EventStruct *event, const String& str
   }
   return success;
 }
+
+# if ADAGFX_ENABLE_GET_CONFIG_VALUE
+
+/****************************************************************************
+ * plugin_get_config_value: Retrieve values like [<taskname>#<valuename>]
+ ***************************************************************************/
+bool P131_data_struct::plugin_get_config_value(struct EventStruct *event,
+                                               String            & string) {
+  bool success = false;
+
+  if (gfxHelper != nullptr) {
+    success = gfxHelper->pluginGetConfigValue(string);
+  }
+  return success;
+}
+
+# endif // if ADAGFX_ENABLE_GET_CONFIG_VALUE
 
 /****************************************************************************
  * plugin_ten_per_second: Re-draw the default content that should be scrolled

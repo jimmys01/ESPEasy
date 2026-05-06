@@ -3,24 +3,34 @@
 
 #include "../../ESPEasy_common.h"
 
-#include <Arduino.h>
+
 #include <WiFiClient.h>
 #include <WiFiUdp.h>
 
-#if FEATURE_HTTP_CLIENT
-#ifdef ESP8266
-# include <ESP8266HTTPClient.h>
-#endif // ifdef ESP8266
-#ifdef ESP32
-# include <HTTPClient.h>
-#endif // ifdef ESP32
+#if FEATURE_HTTP_CLIENT || FEATURE_DOWNLOAD
+# if FEATURE_TLS
+
+#  include "HttpClientLight.h"
+#  include <WiFiClientSecureLightBearSSL.h>
+#  define ESPEasy_HTTPClient HTTPClientLight
+
+# else
+
+#  ifdef ESP8266
+#   include <ESP8266HTTPClient.h>
+#  endif // ifdef ESP8266
+#  ifdef ESP32
+#   include <HTTPClient.h>
+#  endif // ifdef ESP32
+
+#  define ESPEasy_HTTPClient HTTPClient
+
+# endif
 #endif
 
-
-/*********************************************************************************************\
-   Syslog client
-\*********************************************************************************************/
-void sendSyslog(uint8_t logLevel, const String& message);
+#if FEATURE_HTTP_TLS
+#include "../DataTypes/TLS_types.h"
+#endif // if FEATURE_HTTP_TLS
 
 
 #if FEATURE_ESPEASY_P2P
@@ -28,7 +38,7 @@ void sendSyslog(uint8_t logLevel, const String& message);
 /*********************************************************************************************\
    Update UDP port (ESPEasy propiertary protocol)
 \*********************************************************************************************/
-void updateUDPport();
+void updateUDPport(bool force);
 
 
 /*********************************************************************************************\
@@ -54,6 +64,36 @@ String formatUnitToIPAddress(uint8_t unit, uint8_t formatCode);
 IPAddress getIPAddressForUnit(uint8_t unit);
 
 /*********************************************************************************************\
+   Get Name for specific unit
+\*********************************************************************************************/
+String getNameForUnit(uint8_t unit);
+
+/*********************************************************************************************\
+   Get Age for specific unit
+\*********************************************************************************************/
+long getAgeForUnit(uint8_t unit);
+
+/*********************************************************************************************\
+   Get Build for specific unit
+\*********************************************************************************************/
+uint16_t getBuildnrForUnit(uint8_t unit);
+
+/*********************************************************************************************\
+   Get Load for specific unit
+\*********************************************************************************************/
+float getLoadForUnit(uint8_t unit);
+
+/*********************************************************************************************\
+   Get nodeType for specific unit
+\*********************************************************************************************/
+uint8_t getTypeForUnit(uint8_t unit);
+
+/*********************************************************************************************\
+   Get nodeTypeString for specific unit
+\*********************************************************************************************/
+String getTypeStringForUnit(uint8_t unit);
+
+/*********************************************************************************************\
    Send UDP message to specific unit (unit 255=broadcast)
 \*********************************************************************************************/
 void sendUDP(uint8_t unit, const uint8_t *data, uint8_t size);
@@ -77,7 +117,7 @@ void sendSysInfoUDP(uint8_t repeats);
 /********************************************************************************************\
    Respond to HTTP XML requests for SSDP information
  \*********************************************************************************************/
-void SSDP_schema(WiFiClient& client);
+void SSDP_schema();
 
 /********************************************************************************************\
    Global SSDP stuff
@@ -154,6 +194,12 @@ bool connectClient(WiFiClient& client, const char *hostname, uint16_t port, uint
 bool connectClient(WiFiClient& client, IPAddress ip, uint16_t port, uint32_t timeout_ms = 100);
 #endif // FEATURE_HTTP_CLIENT
 
+void scrubDNS();
+
+bool valid_DNS_address(const IPAddress& dns);
+
+bool setDNS(int index, const IPAddress& dns);
+
 bool resolveHostByName(const char *aHostname, IPAddress& aResult, uint32_t timeout_ms = 1000);
 
 bool hostReachable(const String& hostname);
@@ -179,7 +225,9 @@ bool splitUserPass_HostPortString(const String& hostPortString, String& user, St
 
 // Split a full URL like "http://hostname:port/path/file.htm"
 // Return value is everything after the hostname:port section (including /)
-String splitURL(const String& fullURL, String& user, String& pass, String& host, uint16_t& port, String& file);
+String splitURL(const String& fullURL, String& user, String& pass, String& host, uint16_t& port, String& file, String& protocol);
+
+String joinURL(const String& user, const String& pass, const String& host, uint16_t& port, const String& uri, const String& protocol = EMPTY_STRING );
 
 
 #if FEATURE_HTTP_CLIENT
@@ -188,13 +236,18 @@ String splitURL(const String& fullURL, String& user, String& pass, String& host,
 // @retval HTTP return code.
 int http_authenticate(const String& logIdentifier,
                       WiFiClient  & client,
-                      HTTPClient  & http,
+                      ESPEasy_HTTPClient  & http,
                       uint16_t      timeout,
                       const String& user,
                       const String& pass,
                       const String& host,
                       uint16_t      port,
+                      const String& protocol,
+                     # if FEATURE_JSON_EVENT
+                      String        uri,
+                     # else // if FEATURE_JSON_EVENT
                       const String& uri,
+                     # endif // if FEATURE_JSON_EVENT
                       const String& HttpMethod,
                       const String& header,
                       const String& postStr,
@@ -212,7 +265,12 @@ String send_via_http(const String& logIdentifier,
                      const String& header,
                      const String& postStr,
                      int         & httpCode,
-                     bool          must_check_reply);
+                     bool          must_check_reply,
+                     const String& protocol
+                     #if FEATURE_HTTP_TLS
+                     , TLS_types   tlsType = TLS_types::NoTLS
+                     #endif // if FEATURE_HTTP_TLS
+                    );
 #endif // FEATURE_HTTP_CLIENT
 
 #if FEATURE_DOWNLOAD
@@ -221,16 +279,17 @@ String send_via_http(const String& logIdentifier,
 // If the URL ends with a /, the file part will be assumed the same as file_save.
 // If file_save is empty, the file part from the URL will be used as local file name.
 // Return true when successful.
-bool downloadFile(const String& url, String file_save);
+bool downloadFile(String file_save, String error);
 
 bool downloadFile(const String& url, String file_save, const String& user, const String& pass, String& error);
 
-bool downloadFirmware(const String& url, String& error);
+bool downloadFirmware(String filename, String& error);
+bool downloadFirmware(const String& url, String& file_save, String& user, String& pass, String& error);
+
+// Return the full url including filename
+String joinUrlFilename(const String& url, String& filename);
 
 #endif // if FEATURE_DOWNLOAD
-
-
-
 
 
 

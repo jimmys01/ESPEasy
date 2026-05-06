@@ -5,7 +5,7 @@
   Pre defined settings for off-the-shelf hardware
   \*********************************************************************************************/
 
-#include <Arduino.h>
+#include "../../ESPEasy_common.h"
 
 // This enum will be stored, so do not change order or at least the values.
 enum class DeviceModel : uint8_t {
@@ -21,11 +21,13 @@ enum class DeviceModel : uint8_t {
   DeviceModel_Sonoff_POWr2,
   DeviceModel_Shelly1,
   DeviceModel_ShellyPLUG_S,
+# if CONFIG_ETH_USE_ESP32_EMAC && FEATURE_ETHERNET
   DeviceModel_Olimex_ESP32_PoE,
   DeviceModel_Olimex_ESP32_EVB,
   DeviceModel_Olimex_ESP32_GATEWAY,
   DeviceModel_wESP32,
   DeviceModel_WT32_ETH01,
+#endif
   
 
   DeviceModel_MAX

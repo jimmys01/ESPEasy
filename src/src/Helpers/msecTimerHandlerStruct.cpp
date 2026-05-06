@@ -1,11 +1,10 @@
 #include "../Helpers/msecTimerHandlerStruct.h"
 
-#include <Arduino.h>
 
 #include "../Helpers/ESPEasy_time_calc.h"
 
 
-#define MAX_SCHEDULER_WAIT_TIME 5 // Max delay used in the scheduler for passing idle time.
+#define MAX_SCHEDULER_WAIT_TIME 50 // Max delay used in the scheduler for passing idle time.
 
   msecTimerHandlerStruct::msecTimerHandlerStruct() : get_called(0), get_called_ret_id(0), max_queue_length(0),
     last_exec_time_usec(0), total_idle_time_usec(0),  idle_time_pct(0.0f), is_idle(false), eco_mode(true)
@@ -147,7 +146,7 @@
 
   void msecTimerHandlerStruct::recordIdle() {
     if (is_idle) { return; }
-    last_exec_time_usec = getMicros64();
+    last_exec_time_usec = micros();
     is_idle             = true;
     delay(0); // Nothing to do, so leave time for backgroundtasks
   }
@@ -155,5 +154,5 @@
   void msecTimerHandlerStruct::recordRunning() {
     if (!is_idle) { return; }
     is_idle               = false;
-    total_idle_time_usec += usecPassedSince(last_exec_time_usec);
+    total_idle_time_usec += usecPassedSince_fast(last_exec_time_usec);
   }

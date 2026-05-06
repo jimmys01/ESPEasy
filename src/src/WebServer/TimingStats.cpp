@@ -5,15 +5,10 @@
 #include "../WebServer/ESPEasy_WebServer.h"
 #include "../WebServer/HTML_wrappers.h"
 #include "../WebServer/Markup.h"
-#include "../WebServer/Markup_Forms.h"
-
-#include "../DataTypes/ESPEasy_plugin_functions.h"
+#include "../Helpers/_Plugin_init.h"
 
 #include "../Globals/ESPEasy_time.h"
-#include "../Globals/Protocol.h"
 #include "../Globals/RamTracker.h"
-
-#include "../Globals/Device.h"
 
 
 #define TIMING_STATS_THRESHOLD 100000
@@ -27,16 +22,23 @@ void handle_timingstats() {
   sendHeadandTail_stdtemplate(_HEAD);
   html_table_class_multirow();
   html_TR();
-  html_table_header(F("Description"));
-  html_table_header(F("Function"));
-  html_table_header(F("#calls"));
-  html_table_header(F("call/sec"));
-  html_table_header(F("duty (%)"));
-  html_table_header(F("min (ms)"));
-  html_table_header(F("Avg (ms)"));
-  html_table_header(F("max (ms)"));
+  {
+    const __FlashStringHelper * headers[] = {
+      F("Description"),
+      F("Function"),
+      F("#calls"),
+      F("call/sec"),
+      F("duty (%)"),
+      F("min (ms)"),
+      F("Avg (ms)"),
+      F("max (ms)")};
+    for (unsigned int i = 0; i < NR_ELEMENTS(headers); ++i) {
+      html_table_header(headers[i]);
+    }
+  }
 
-  long timeSinceLastReset = stream_timing_statistics(true);
+
+  const int32_t timeSinceLastReset = stream_timing_statistics(true);
   html_end_table();
 
   html_table_class_normal();
@@ -45,7 +47,7 @@ void handle_timingstats() {
   addRowLabel(F("Start Period"));
   struct tm startPeriod = node_time.addSeconds(node_time.local_tm, -1.0f * timespan, true, true);
   addHtml(formatDateTimeString(startPeriod, '-', ':', ' ', false));
-  addRowLabelValue(LabelType::LOCAL_TIME);
+  addRowLabelValue(LabelType::LOCAL_TIME, false);
   addRowLabel(F("Time span"));
   addHtmlFloat(timespan);
   addHtml(F(" sec"));
@@ -60,7 +62,7 @@ void handle_timingstats() {
 // ********************************************************************************
 // HTML table formatted timing statistics
 // ********************************************************************************
-void format_using_threshhold(unsigned long value) {
+void format_using_threshhold(uint32_t value) {
   float value_msec = value / 1000.0f;
 
   if (value > TIMING_STATS_THRESHOLD) {
@@ -70,9 +72,9 @@ void format_using_threshhold(unsigned long value) {
   }
 }
 
-void stream_html_timing_stats(const TimingStats& stats, long timeSinceLastReset) {
-  uint64_t minVal, maxVal;
-  const uint64_t c = stats.getMinMax(minVal, maxVal);
+void stream_html_timing_stats(const TimingStats& stats, int32_t timeSinceLastReset) {
+  uint32_t minVal, maxVal;
+  const uint32_t c = stats.getMinMax(minVal, maxVal);
 
   html_TD();
   addHtmlInt(c);
@@ -104,12 +106,12 @@ void stream_html_timing_stats(const TimingStats& stats, long timeSinceLastReset)
   format_using_threshhold(maxVal);
 }
 
-long stream_timing_statistics(bool clearStats) {
-  long timeSinceLastReset = timePassedSince(timingstats_last_reset);
+int32_t stream_timing_statistics(bool clearStats) {
+  const int32_t timeSinceLastReset = timePassedSince(timingstats_last_reset);
 
   for (auto& x: pluginStats) {
     if (!x.second.isEmpty()) {
-      const deviceIndex_t deviceIndex = static_cast<deviceIndex_t>(x.first / 256);
+      const deviceIndex_t deviceIndex = deviceIndex_t::toDeviceIndex(x.first >> 8);
 
       if (validDeviceIndex(deviceIndex)) {
         if (x.second.thresholdExceeded(TIMING_STATS_THRESHOLD)) {
@@ -118,23 +120,21 @@ long stream_timing_statistics(bool clearStats) {
           html_TR_TD();
         }
         {
-          addHtml(F("P_"));
-          addHtmlInt(Device[deviceIndex].Number);
-          addHtml('_');
+          const pluginID_t pluginID = getPluginID_from_DeviceIndex(deviceIndex);
+          addHtml(get_formatted_Plugin_number(pluginID));
+          addHtml(' ');
           addHtml(getPluginNameFromDeviceIndex(deviceIndex));
         }
         html_TD();
         addHtml(getPluginFunctionName(x.first % 256));
         stream_html_timing_stats(x.second, timeSinceLastReset);
       }
-
-      if (clearStats) { x.second.reset(); }
     }
   }
 
   for (auto& x: controllerStats) {
     if (!x.second.isEmpty()) {
-      const int ProtocolIndex = x.first / 256;
+      const int ProtocolIndex = x.first >> 8;
 
       if (x.second.thresholdExceeded(TIMING_STATS_THRESHOLD)) {
         html_TR_TD_highlight();
@@ -142,16 +142,13 @@ long stream_timing_statistics(bool clearStats) {
         html_TR_TD();
       }
       {
-        addHtml(F("C_"));
-        addHtmlInt(Protocol[ProtocolIndex].Number);
-        addHtml('_');
+        addHtml(get_formatted_Controller_number(getCPluginID_from_ProtocolIndex(ProtocolIndex)));
+        addHtml(' ');
         addHtml(getCPluginNameFromProtocolIndex(ProtocolIndex));
       }
       html_TD();
       addHtml(getCPluginCFunctionName(static_cast<CPlugin::Function>(x.first % 256)));
       stream_html_timing_stats(x.second, timeSinceLastReset);
-
-      if (clearStats) { x.second.reset(); }
     }
   }
 
@@ -165,12 +162,13 @@ long stream_timing_statistics(bool clearStats) {
       addHtml(getMiscStatsName(x.first));
       html_TD();
       stream_html_timing_stats(x.second, timeSinceLastReset);
-
-      if (clearStats) { x.second.reset(); }
     }
   }
 
   if (clearStats) {
+    pluginStats.clear();
+    controllerStats.clear();
+    miscStats.clear();
     timingstats_last_reset = millis();
   }
   return timeSinceLastReset;

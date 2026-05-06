@@ -1,22 +1,36 @@
 #include "../DataStructs/ExtraTaskSettingsStruct.h"
 
-#include "../../ESPEasy_common.h"
+#include "../DataStructs/PluginStats_Config.h"
+
+#include "../Helpers/Misc.h"
+#include "../Helpers/StringConverter.h"
+#include "../Helpers/StringGenerator_Plugin.h"
 
 #define EXTRA_TASK_SETTINGS_VERSION 1
 
-ExtraTaskSettingsStruct::ExtraTaskSettingsStruct() : TaskIndex(INVALID_TASK_INDEX) {
-  ZERO_FILL(TaskDeviceName);
 
-  clearUnusedValueNames(0);
-
-  for (uint8_t i = 0; i < PLUGIN_EXTRACONFIGVAR_MAX; ++i) {
-    TaskDevicePluginConfigLong[i] = 0;
-    TaskDevicePluginConfig[i]     = 0;
+ExtraTaskSettingsStruct::ExtraTaskSettingsStruct()
+{
+  memset(this, 0, sizeof(ExtraTaskSettingsStruct));
+  TaskIndex = INVALID_TASK_INDEX;
+  version = EXTRA_TASK_SETTINGS_VERSION;
+  for (int i = 0; i < VARS_PER_TASK; ++i) {
+    TaskDeviceValueDecimals[i] = 2;
+    TaskDeviceErrorValue[i] = NAN;
   }
 }
 
 void ExtraTaskSettingsStruct::clear() {
-  *this = ExtraTaskSettingsStruct();
+  // Need to make sure every byte between the members is also zero
+  // Otherwise the checksum will fail and settings will be saved too often.
+  memset(this, 0, sizeof(ExtraTaskSettingsStruct));
+  TaskIndex = INVALID_TASK_INDEX;
+  //dummy1 = 0;
+  version = EXTRA_TASK_SETTINGS_VERSION;
+  for (int i = 0; i < VARS_PER_TASK; ++i) {
+    TaskDeviceValueDecimals[i] = 2;
+    TaskDeviceErrorValue[i] = NAN;
+  }
 }
 
 void ExtraTaskSettingsStruct::validate() {
@@ -39,12 +53,16 @@ void ExtraTaskSettingsStruct::validate() {
       // Need to initialize the newly added fields
       for (uint8_t i = 0; i < VARS_PER_TASK; ++i) {
         setIgnoreRangeCheck(i);
-        TaskDeviceErrorValue[i] = 0.0f;
+        TaskDeviceErrorValue[i] = NAN;
         VariousBits[i]          = 0u;
       }
     }
     version = EXTRA_TASK_SETTINGS_VERSION;
   }
+}
+
+ChecksumType ExtraTaskSettingsStruct::computeChecksum() const {
+  return ChecksumType(reinterpret_cast<const uint8_t *>(this), sizeof(ExtraTaskSettingsStruct));
 }
 
 bool ExtraTaskSettingsStruct::checkUniqueValueNames() const {
@@ -66,8 +84,8 @@ void ExtraTaskSettingsStruct::clearUnusedValueNames(uint8_t usedVars) {
     ZERO_FILL(TaskDeviceValueNames[i]);
     TaskDeviceValueDecimals[i] = 2;
     setIgnoreRangeCheck(i);
-    TaskDeviceErrorValue[i] = 0.0f;
-    VariousBits[i] = 0;
+    TaskDeviceErrorValue[i] = NAN;
+    VariousBits[i]          = 0;
   }
 }
 
@@ -90,35 +108,43 @@ bool ExtraTaskSettingsStruct::checkInvalidCharInNames() const {
   return true;
 }
 
+String ExtraTaskSettingsStruct::getInvalidCharsForNames() {
+  return F(",-+/*=^%!#[]{}()");
+}
+
 bool ExtraTaskSettingsStruct::validCharForNames(char c) {
-  // Smal optimization to check these chars as they are in sequence in the ASCII table
+  return c != ' ' && getInvalidCharsForNames().indexOf(c) == -1;
+}
 
-  /*
-     case '(': // 40
-     case ')': // 41
-     case '*': // 42
-     case '+': // 43
-     case ',': // 44
-     case '-': // 45
-   */
-
-  if ((c >= '(') && (c <= '-')) { return false; }
-
-  if (
-    (c == ' ') ||
-    (c == '!') ||
-    (c == '#') ||
-    (c == '%') ||
-    (c == '/') ||
-    (c == '=') ||
-    (c == '[') ||
-    (c == ']') ||
-    (c == '^') ||
-    (c == '{') ||
-    (c == '}')) {
-    return false;
+void ExtraTaskSettingsStruct::setTaskDeviceValueName(taskVarIndex_t taskVarIndex, const String& str)
+{
+  if (validTaskVarIndex(taskVarIndex)) {
+    safe_strncpy(
+      TaskDeviceValueNames[taskVarIndex],
+      str,
+      sizeof(TaskDeviceValueNames[taskVarIndex]));
   }
-  return true;
+}
+
+void ExtraTaskSettingsStruct::setTaskDeviceValueName(taskVarIndex_t taskVarIndex, const __FlashStringHelper * str)
+{
+  setTaskDeviceValueName(taskVarIndex, String(str));
+}
+
+void ExtraTaskSettingsStruct::clearTaskDeviceValueName(taskVarIndex_t taskVarIndex)
+{
+  if (validTaskVarIndex(taskVarIndex)) {
+    ZERO_FILL(TaskDeviceValueNames[taskVarIndex]);
+  }
+}
+
+void ExtraTaskSettingsStruct::clearDefaultTaskDeviceValueNames()
+{
+  for (int i = 0; i < VARS_PER_TASK; ++i) {
+    if (isDefaultTaskVarName(i)) {
+      clearTaskDeviceValueName(i);
+    }
+  }
 }
 
 void ExtraTaskSettingsStruct::setAllowedRange(taskVarIndex_t taskVarIndex, const float& minValue, const float& maxValue)
@@ -176,6 +202,7 @@ float ExtraTaskSettingsStruct::checkAllowedRange(taskVarIndex_t taskVarIndex, co
 }
 
 #if FEATURE_PLUGIN_STATS
+
 // Plugin Stats is now only a single bit, but this may later changed into a combobox with some options.
 // Thus leave 8 bits for the plugin stats options.
 
@@ -195,8 +222,102 @@ void ExtraTaskSettingsStruct::enablePluginStats(taskVarIndex_t taskVarIndex, boo
 bool ExtraTaskSettingsStruct::anyEnabledPluginStats() const
 {
   for (uint8_t i = 0; i < VARS_PER_TASK; ++i) {
-    if (enabledPluginStats(i)) return true;
+    if (enabledPluginStats(i)) { return true; }
   }
   return false;
 }
-#endif
+
+PluginStats_Config_t ExtraTaskSettingsStruct::getPluginStatsConfig(taskVarIndex_t taskVarIndex) const
+{
+  if (!validTaskVarIndex(taskVarIndex)) { return PluginStats_Config_t(); }
+
+  PluginStats_Config_t res(get8BitFromUL(VariousBits[taskVarIndex], 0));
+  return res;
+}
+
+void ExtraTaskSettingsStruct::setPluginStatsConfig(taskVarIndex_t taskVarIndex, PluginStats_Config_t config)
+{
+  if (validTaskVarIndex(taskVarIndex)) {
+    uint8_t value = config.getStoredBits();
+    bitWrite(value, 1, bitRead(VariousBits[taskVarIndex], 1));
+    set8BitToUL(VariousBits[taskVarIndex], 0, value);
+  }
+}
+
+
+#endif // if FEATURE_PLUGIN_STATS
+
+bool ExtraTaskSettingsStruct::isDefaultTaskVarName(taskVarIndex_t taskVarIndex) const
+{
+  if (!validTaskVarIndex(taskVarIndex)) { return false; }
+  return bitRead(VariousBits[taskVarIndex], 1);
+}
+
+void ExtraTaskSettingsStruct::isDefaultTaskVarName(taskVarIndex_t taskVarIndex, bool isDefault)
+{
+  if (validTaskVarIndex(taskVarIndex)) {
+    bitWrite(VariousBits[taskVarIndex], 1, isDefault);
+  }
+}
+
+#if FEATURE_TASKVALUE_UNIT_OF_MEASURE
+uint8_t ExtraTaskSettingsStruct::getTaskVarUnitOfMeasure(taskVarIndex_t taskVarIndex) const {
+  if (!validTaskVarIndex(taskVarIndex)) { return 0u; }
+  return get8BitFromUL(VariousBits[taskVarIndex], 8);
+}
+
+void ExtraTaskSettingsStruct::setTaskVarUnitOfMeasure(taskVarIndex_t taskVarIndex,
+                                                      uint8_t        unitOfMeasure) {
+  if (validTaskVarIndex(taskVarIndex)) {
+    set8BitToUL(VariousBits[taskVarIndex], 8, unitOfMeasure);
+  }
+}
+#endif // if FEATURE_TASKVALUE_UNIT_OF_MEASURE
+
+#if FEATURE_CUSTOM_TASKVAR_VTYPE
+uint8_t ExtraTaskSettingsStruct::getTaskVarCustomVType(taskVarIndex_t taskVarIndex) const {
+  if (!validTaskVarIndex(taskVarIndex)) { return 0u; }
+  return get8BitFromUL(VariousBits[taskVarIndex], 16);
+}
+
+void ExtraTaskSettingsStruct::setTaskVarCustomVType(taskVarIndex_t taskVarIndex,
+                                                    uint8_t        customVType) {
+  if (validTaskVarIndex(taskVarIndex)) {
+    set8BitToUL(VariousBits[taskVarIndex], 16, customVType);
+  }
+}
+#endif // if FEATURE_CUSTOM_TASKVAR_VTYPE
+
+#if FEATURE_MQTT_STATE_CLASS
+uint8_t ExtraTaskSettingsStruct::getTaskVarStateClass(taskVarIndex_t taskVarIndex) const {
+  if (!validTaskVarIndex(taskVarIndex)) { return 0u; }
+  return get3BitFromUL(VariousBits[taskVarIndex], 24); // 3 Bits 24, 25, 26
+}
+
+void ExtraTaskSettingsStruct::setTaskVarStateClass(taskVarIndex_t taskVarIndex,
+                                                   uint8_t        stateClass) {
+  if (validTaskVarIndex(taskVarIndex)) {
+    set3BitToUL(VariousBits[taskVarIndex], 24, stateClass); // 3 Bits 24, 25, 26
+  }
+}
+#endif // if FEATURE_MQTT_STATE_CLASS
+
+
+void ExtraTaskSettingsStruct::populateDeviceValueNamesSeq(
+  const __FlashStringHelper *valuename,
+  size_t                     nrValues,
+  uint8_t                    defaultDecimals,
+  bool                       displayString)
+{
+  for (byte i = 0; i < VARS_PER_TASK; ++i) {
+    if (i < nrValues) {
+      safe_strncpy(
+        TaskDeviceValueNames[i],
+        Plugin_valuename(valuename, i, displayString),
+        sizeof(TaskDeviceValueNames[i]));
+      TaskDeviceValueDecimals[i] = defaultDecimals;
+    } else {
+      ZERO_FILL(TaskDeviceValueNames[i]);
+    }
+  }
+}

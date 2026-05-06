@@ -7,6 +7,7 @@
 #include "../ESPEasyCore/Serial.h"
 #include "../Globals/ESPEasy_time.h"
 #include "../Globals/Statistics.h"
+#include "../Helpers/_CPlugin_init.h"
 #include "../Helpers/ESPEasy_FactoryDefault.h"
 #include "../Helpers/ESPEasy_Storage.h"
 #include "../Helpers/Numerical.h"
@@ -14,10 +15,11 @@
 #include "../Helpers/StringConverter.h"
 #include "../Helpers/StringParser.h"
 
-#if FEATURE_SD
-#include <SD.h>
-#endif
+#include "../../ESPEasy/net/_NWPlugin_Helper.h"
 
+#if FEATURE_SD
+# include <SD.h>
+#endif // if FEATURE_SD
 
 bool remoteConfig(struct EventStruct *event, const String& string)
 {
@@ -28,10 +30,10 @@ bool remoteConfig(struct EventStruct *event, const String& string)
   bool   success = false;
   String command = parseString(string, 1);
 
-  if (command.equals(F("config")))
+  if (equals(command, F("config")))
   {
     // Command: "config,task,<taskname>,<actual Set Config command>"
-    if (parseString(string, 2).equals(F("task")))
+    if (equals(parseString(string, 2), F("task")))
     {
       String configTaskName = parseStringKeepCase(string, 3);
 
@@ -69,6 +71,43 @@ void delayBackground(unsigned long dsdelay)
 }
 
 /********************************************************************************************\
+   Toggle network enabled state
+ \*********************************************************************************************/
+bool setNetworkEnableStatus(ESPEasy::net::networkIndex_t networkIndex, bool enabled)
+{
+  if (!validNetworkIndex(networkIndex)) { return false; }
+  #ifndef BUILD_NO_RAM_TRACKER
+  checkRAM(F("setNetworkEnableStatus"));
+  #endif // ifndef BUILD_NO_RAM_TRACKER
+
+  // Only enable network if it has a network interface configured
+  if ((Settings.getNWPluginID_for_network(networkIndex) != ESPEasy::net::INVALID_NW_PLUGIN_ID) || !enabled) {
+    struct EventStruct TempEvent;
+    TempEvent.NetworkIndex = networkIndex;
+    String dummy;
+
+    if (!enabled) {
+      // Use the scheduler as this also removes any pending init calls.
+      Scheduler.setNetworkExitTimer(0, networkIndex);
+    }
+    Settings.setNetworkEnabled(networkIndex, enabled);
+
+    if (enabled) {
+      if (ESPEasy::net::getNWPluginData(networkIndex) == nullptr) {
+        // Only init when not yet started
+
+        if (!ESPEasy::net::NWPluginCall(NWPlugin::Function::NWPLUGIN_INIT, &TempEvent, dummy)) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+  return false;
+}
+
+/********************************************************************************************\
    Toggle controller enabled state
  \*********************************************************************************************/
 bool setControllerEnableStatus(controllerIndex_t controllerIndex, bool enabled)
@@ -80,8 +119,25 @@ bool setControllerEnableStatus(controllerIndex_t controllerIndex, bool enabled)
 
   // Only enable controller if it has a protocol configured
   if ((Settings.Protocol[controllerIndex] != 0) || !enabled) {
+    struct EventStruct TempEvent;
+    TempEvent.ControllerIndex = controllerIndex;
+    String dummy;
+
+    if (!enabled) {
+      CPluginCall(CPlugin::Function::CPLUGIN_EXIT, &TempEvent, dummy);
+    }
+
     Settings.ControllerEnabled[controllerIndex] = enabled;
-    return true;
+    const protocolIndex_t ProtocolIndex = getProtocolIndex_from_ControllerIndex(controllerIndex);
+
+    if (validProtocolIndex(ProtocolIndex)) {
+      struct EventStruct TempEvent;
+      TempEvent.ControllerIndex = controllerIndex;
+      String dummy;
+      const CPlugin::Function cfunction =
+        enabled ? CPlugin::Function::CPLUGIN_INIT : CPlugin::Function::CPLUGIN_EXIT;
+      return do_CPluginCall(ProtocolIndex, cfunction, &TempEvent, dummy) || CPlugin::Function::CPLUGIN_EXIT == cfunction;
+    }
   }
   return false;
 }
@@ -97,21 +153,29 @@ bool setTaskEnableStatus(struct EventStruct *event, bool enabled)
   #endif // ifndef BUILD_NO_RAM_TRACKER
 
   // Only enable task if it has a Plugin configured
-  if (validPluginID(Settings.TaskDeviceNumber[event->TaskIndex]) || !enabled) {
-    String dummy;
+  if (validPluginID(Settings.getPluginID_for_task(event->TaskIndex)) || !enabled) {
+    if (enabled != Settings.TaskDeviceEnabled[event->TaskIndex])
+    {
+      String dummy;
 
-    if (!enabled) {
-      PluginCall(PLUGIN_EXIT, event, dummy);
-    }
-    Settings.TaskDeviceEnabled[event->TaskIndex] = enabled;
-
-    if (enabled) {
-      if (!PluginCall(PLUGIN_INIT, event, dummy)) {
-        return false;
+      if (!enabled) {
+        PluginCall(PLUGIN_EXIT, event, dummy);
       }
 
-      // Schedule the task to be executed almost immediately
-      Scheduler.schedule_task_device_timer(event->TaskIndex, millis() + 10);
+      // Toggle enable/disable state via command
+      // FIXME TD-er: Should this be a 'runtime' change, or actually change the intended state?
+      // Settings.TaskDeviceEnabled[event->TaskIndex].enabled = enabled;
+      Settings.TaskDeviceEnabled[event->TaskIndex] = enabled;
+
+      if (enabled) {
+        // Schedule the plugin to be read.
+        // Do this before actual init, to allow the plugin to schedule a specific first read.
+        Scheduler.schedule_task_device_timer(event->TaskIndex, millis() + 10);
+
+        if (!PluginCall(PLUGIN_INIT, event, dummy)) {
+          return false;
+        }
+      }
     }
     return true;
   }
@@ -127,12 +191,21 @@ void taskClear(taskIndex_t taskIndex, bool save)
   #ifndef BUILD_NO_RAM_TRACKER
   checkRAM(F("taskClear"));
   #endif // ifndef BUILD_NO_RAM_TRACKER
+
+  if (Settings.TaskDeviceEnabled[taskIndex]) {
+    struct EventStruct TempEvent(taskIndex);
+    String dummy;
+    PluginCall(PLUGIN_EXIT, &TempEvent, dummy);
+  }
   Settings.clearTask(taskIndex);
-  Cache.clearTaskCaches();
-  ExtraTaskSettings.clear(); // Invalidate any cached values.
+  clearTaskCache(taskIndex); // Invalidate any cached values.
+  ExtraTaskSettings.clear();
   ExtraTaskSettings.TaskIndex = taskIndex;
 
   if (save) {
+    #ifndef LIMIT_BUILD_SIZE
+    addLog(LOG_LEVEL_INFO, F("taskClear() save settings"));
+    #endif // ifndef BUILD_MINIMAL_OTA
     SaveTaskSettings(taskIndex);
     SaveSettings();
   }
@@ -152,6 +225,7 @@ void taskClear(taskIndex_t taskIndex, bool save)
    it is excluded from the calculation !
  \*********************************************************************************************/
 #if defined(ARDUINO_ESP8266_RELEASE_2_3_0)
+
 void dump(uint32_t addr) { // Seems already included in core 2.4 ...
   serialPrint(String(addr, HEX));
   serialPrint(": ");
@@ -210,9 +284,7 @@ void dump(uint32_t addr) { // Seems already included in core 2.4 ...
 /********************************************************************************************\
    Handler for keeping ExtraTaskSettings up to date using cache
  \*********************************************************************************************/
-String getTaskDeviceName(taskIndex_t TaskIndex) {
-  return Cache.getTaskDeviceName(TaskIndex);
-}
+String getTaskDeviceName(taskIndex_t TaskIndex) { return Cache.getTaskDeviceName(TaskIndex); }
 
 /********************************************************************************************\
    Handler for getting Value Names from TaskIndex
@@ -222,6 +294,7 @@ String getTaskDeviceName(taskIndex_t TaskIndex) {
  \*********************************************************************************************/
 String getTaskValueName(taskIndex_t TaskIndex, uint8_t TaskValueIndex) {
   const int valueCount = getValueCountForTask(TaskIndex);
+
   if (TaskValueIndex < valueCount) {
     return Cache.getTaskDeviceValueName(TaskIndex, TaskValueIndex);
   }
@@ -234,13 +307,13 @@ String getTaskValueName(taskIndex_t TaskIndex, uint8_t TaskValueIndex) {
 void emergencyReset()
 {
   // Direct Serial is allowed here, since this is only an emergency task.
-  Serial.begin(115200);
-  Serial.write(0xAA);
-  Serial.write(0x55);
+  ESPEASY_SERIAL_0.begin(115200);
+  ESPEASY_SERIAL_0.write(0xAA);
+  ESPEASY_SERIAL_0.write(0x55);
   delay(1);
 
-  if (Serial.available() == 2) {
-    if ((Serial.read() == 0xAA) && (Serial.read() == 0x55))
+  if (ESPEASY_SERIAL_0.available() == 2) {
+    if ((ESPEASY_SERIAL_0.read() == 0xAA) && (ESPEASY_SERIAL_0.read() == 0x55))
     {
       serialPrintln(F("\n\n\rSystem will reset to factory defaults in 10 seconds..."));
       delay(10000);
@@ -252,7 +325,7 @@ void emergencyReset()
 /********************************************************************************************\
    Delayed reboot, in case of issues, do not reboot with high frequency as it might not help...
  \*********************************************************************************************/
-void delayedReboot(int rebootDelay, ESPEasy_Scheduler::IntendedRebootReason_e reason)
+void delayedReboot(int rebootDelay, IntendedRebootReason_e reason)
 {
   // Direct Serial is allowed here, since this is only an emergency task.
   while (rebootDelay != 0)
@@ -265,7 +338,7 @@ void delayedReboot(int rebootDelay, ESPEasy_Scheduler::IntendedRebootReason_e re
   reboot(reason);
 }
 
-void reboot(ESPEasy_Scheduler::IntendedRebootReason_e reason) {
+void reboot(IntendedRebootReason_e reason) {
   prepareShutdown(reason);
   #if defined(ESP32)
   ESP.restart();
@@ -290,46 +363,86 @@ void SendValueLogger(taskIndex_t TaskIndex)
   featureSD = true;
   # endif // if FEATURE_SD
 
-  if (featureSD 
+  if (featureSD
       # ifndef BUILD_NO_DEBUG
       || loglevelActiveFor(LOG_LEVEL_DEBUG)
-      #endif
-  ) {
+      # endif // ifndef BUILD_NO_DEBUG
+      ) {
     const deviceIndex_t DeviceIndex = getDeviceIndex_from_TaskIndex(TaskIndex);
 
     if (validDeviceIndex(DeviceIndex)) {
       const uint8_t valueCount = getValueCountForTask(TaskIndex);
+      String taskName          = getTaskDeviceName(TaskIndex);
+
+      const String logline_prefix =
+        strformat(F("%s %s,%d,%s")
+                  , node_time.getDateString('-').c_str()
+                  , node_time.getTimeString(':').c_str()
+                  , Settings.Unit
+                  , taskName.c_str()
+                  );
 
       for (uint8_t varNr = 0; varNr < valueCount; varNr++)
       {
-        logger += node_time.getDateString('-');
-        logger += ' ';
-        logger += node_time.getTimeString(':');
-        logger += ',';
-        logger += Settings.Unit;
-        logger += ',';
-        logger += getTaskDeviceName(TaskIndex);
-        logger += ',';
-        logger += getTaskValueName(TaskIndex, varNr);
-        logger += ',';
-        logger += formatUserVarNoCheck(TaskIndex, varNr);
-        logger += F("\r\n");
+        logger += strformat(F("%s,%s,%s\r\n")
+                            , logline_prefix.c_str()
+                            , Cache.getTaskDeviceValueName(TaskIndex, varNr).c_str()
+                            , formatUserVarNoCheck(TaskIndex, varNr).c_str()
+                            );
       }
+      # if FEATURE_STRING_VARIABLES
+
+      if (Settings.EventAndLogDerivedTaskValues(TaskIndex)) {
+        taskName.toLowerCase();
+        String postfix;
+        const String search = getDerivedValueSearchAndPostfix(taskName, postfix);
+
+        auto it = customStringVar.begin();
+
+        while (it != customStringVar.end()) {
+          if (it->first.startsWith(search) && it->first.endsWith(postfix)) {
+            String valueName    = it->first.substring(search.length(), it->first.indexOf('-'));
+            const String vname2 = getDerivedValueName(taskName, valueName);
+
+            if (!vname2.isEmpty()) {
+              valueName = vname2;
+            }
+
+            if (!it->second.isEmpty()) {
+              String value(it->second);
+              value   = parseTemplateAndCalculate(value);
+              logger += strformat(F("%s,%s,%s\r\n")
+                                  , logline_prefix.c_str()
+                                  , valueName.c_str()
+                                  , value.c_str()
+                                  );
+            }
+          }
+          else if (it->first.substring(0, search.length()).compareTo(search) > 0) {
+            break;
+          }
+          ++it;
+        }
+      }
+      # endif // if FEATURE_STRING_VARIABLES
       # ifndef BUILD_NO_DEBUG
       addLog(LOG_LEVEL_DEBUG, logger);
-      #endif
+      # endif // ifndef BUILD_NO_DEBUG
     }
   }
 #endif // if !defined(BUILD_NO_DEBUG) || FEATURE_SD
 
 #if FEATURE_SD
-  String filename = F("VALUES.CSV");
-  fs::File   logFile  = SD.open(filename, FILE_WRITE);
 
-  if (logFile) {
-    logFile.print(logger);
+  if (!logger.isEmpty()) {
+    String   filename = patch_fname(F("VALUES.CSV"));
+    fs::File logFile  = SD.open(filename, "a+");
+
+    if (logFile) {
+      logFile.print(logger);
+    }
+    logFile.close();
   }
-  logFile.close();
 #endif // if FEATURE_SD
 }
 
@@ -340,143 +453,148 @@ void SendValueLogger(taskIndex_t TaskIndex)
 // Source https://blog.saikoled.com/post/44677718712/how-to-convert-from-hsi-to-rgb-white
 
 void HSV2RGB(float H, float S, float I, int rgb[3]) {
-  int r, g, b;
+  // FIXME TD-er:   Why not just call HSV2RGBW and leave out the W part?
 
-  H = fmod(H, 360);                           // cycle H around to 0-360 degrees
-  H = 3.14159f * H / static_cast<float>(180); // Convert to radians.
-  S = S / 100;
-  S = S > 0 ? (S < 1 ? S : 1) : 0;            // clamp S and I to interval [0,1]
-  I = I / 100;
-  I = I > 0 ? (I < 1 ? I : 1) : 0;
+  int rgbw[4]{};
 
-  // Math! Thanks in part to Kyle Miller.
-  if (H < 2.09439f) {
-    r = 255 * I / 3 * (1 + S * cosf(H) / cosf(1.047196667f - H));
-    g = 255 * I / 3 * (1 + S * (1 - cosf(H) / cosf(1.047196667f - H)));
-    b = 255 * I / 3 * (1 - S);
-  } else if (H < 4.188787f) {
-    H = H - 2.09439f;
-    g = 255 * I / 3 * (1 + S * cosf(H) / cosf(1.047196667f - H));
-    b = 255 * I / 3 * (1 + S * (1 - cosf(H) / cosf(1.047196667f - H)));
-    r = 255 * I / 3 * (1 - S);
-  } else {
-    H = H - 4.188787f;
-    b = 255 * I / 3 * (1 + S * cosf(H) / cosf(1.047196667f - H));
-    r = 255 * I / 3 * (1 + S * (1 - cosf(H) / cosf(1.047196667f - H)));
-    g = 255 * I / 3 * (1 - S);
-  }
-  rgb[0] = r;
-  rgb[1] = g;
-  rgb[2] = b;
+  HSV2RGBW(H, S, I, rgbw);
+  memcpy(rgb, rgbw, 3 * sizeof(int));
+
+  /*
+
+     int r, g, b;
+
+     H = fmod(H, 360);                           // cycle H around to 0-360 degrees
+     constexpr float deg2rad = 3.14159f / 180.0f;
+     H *= deg2rad;                               // Convert to radians.
+     S = S / 100;
+     S = S > 0 ? (S < 1 ? S : 1) : 0;            // clamp S and I to interval [0,1]
+     I = I / 100;
+     I = I > 0 ? (I < 1 ? I : 1) : 0;
+
+     // Math! Thanks in part to Kyle Miller.
+     if (H < 2.09439f) {
+     r = 255 * I / 3 * (1 + S * cosf(H) / cosf(1.047196667f - H));
+     g = 255 * I / 3 * (1 + S * (1 - cosf(H) / cosf(1.047196667f - H)));
+     b = 255 * I / 3 * (1 - S);
+     } else if (H < 4.188787f) {
+     H = H - 2.09439f;
+     g = 255 * I / 3 * (1 + S * cosf(H) / cosf(1.047196667f - H));
+     b = 255 * I / 3 * (1 + S * (1 - cosf(H) / cosf(1.047196667f - H)));
+     r = 255 * I / 3 * (1 - S);
+     } else {
+     H = H - 4.188787f;
+     b = 255 * I / 3 * (1 + S * cosf(H) / cosf(1.047196667f - H));
+     r = 255 * I / 3 * (1 + S * (1 - cosf(H) / cosf(1.047196667f - H)));
+     g = 255 * I / 3 * (1 - S);
+     }
+     rgb[0] = r;
+     rgb[1] = g;
+     rgb[2] = b;
+   */
 }
 
 // uses H 0..360 S 1..100 I/V 1..100 (according to homie convention)
 // Source https://blog.saikoled.com/post/44677718712/how-to-convert-from-hsi-to-rgb-white
-
 void HSV2RGBW(float H, float S, float I, int rgbw[4]) {
-  int   r, g, b, w;
-  float cos_h, cos_1047_h;
+  H = fmod(H, 360);                 // cycle H around to 0-360 degrees
+  constexpr float deg2rad = 3.14159f / 180.0f;
+  H *= deg2rad;                     // Convert to radians.
+  S  = S / 100;
+  S  = S > 0 ? (S < 1 ? S : 1) : 0; // clamp S and I to interval [0,1]
+  I  = I / 100;
+  I  = I > 0 ? (I < 1 ? I : 1) : 0;
 
-  H = fmod(H, 360);                           // cycle H around to 0-360 degrees
-  H = 3.14159f * H / static_cast<float>(180); // Convert to radians.
-  S = S / 100;
-  S = S > 0 ? (S < 1 ? S : 1) : 0;            // clamp S and I to interval [0,1]
-  I = I / 100;
-  I = I > 0 ? (I < 1 ? I : 1) : 0;
+  #define RGB_ORDER 0
+  #define BRG_ORDER 1
+  #define GBR_ORDER 2
 
-  if (H < 2.09439f) {
-    cos_h      = cosf(H);
-    cos_1047_h = cosf(1.047196667f - H);
-    r          = S * 255 * I / 3 * (1 + cos_h / cos_1047_h);
-    g          = S * 255 * I / 3 * (1 + (1 - cos_h / cos_1047_h));
-    b          = 0;
-    w          = 255 * (1 - S) * I;
-  } else if (H < 4.188787f) {
-    H          = H - 2.09439f;
-    cos_h      = cosf(H);
-    cos_1047_h = cosf(1.047196667f - H);
-    g          = S * 255 * I / 3 * (1 + cos_h / cos_1047_h);
-    b          = S * 255 * I / 3 * (1 + (1 - cos_h / cos_1047_h));
-    r          = 0;
-    w          = 255 * (1 - S) * I;
+  int order = RGB_ORDER;
+
+  constexpr float ANGLE_120_DEG = 120.0f * deg2rad;
+  constexpr float ANGLE_240_DEG = 240.0f * deg2rad;
+  constexpr float ANGLE_60_DEG  =  60.0f * deg2rad;
+
+  if (H < ANGLE_120_DEG) {
+    order = RGB_ORDER;
+  } else if (H < ANGLE_240_DEG) {
+    H     = H - ANGLE_120_DEG;
+    order = BRG_ORDER;
   } else {
-    H          = H - 4.188787f;
-    cos_h      = cosf(H);
-    cos_1047_h = cosf(1.047196667f - H);
-    b          = S * 255 * I / 3 * (1 + cos_h / cos_1047_h);
-    r          = S * 255 * I / 3 * (1 + (1 - cos_h / cos_1047_h));
-    g          = 0;
-    w          = 255 * (1 - S) * I;
+    H     = H - ANGLE_240_DEG;
+    order = GBR_ORDER;
+  }
+  const float cos_h      = cosf(H);
+  const float cos_1047_h = cosf(ANGLE_60_DEG - H);
+
+  const int r = S * 255 * I / 3 * (1 + cos_h / cos_1047_h);
+  const int g = S * 255 * I / 3 * (1 + (1 - cos_h / cos_1047_h));
+  const int b = 0;
+  rgbw[3] = 255 * (1 - S) * I;
+
+  if (RGB_ORDER == order) {
+    rgbw[0] = r;
+    rgbw[1] = g;
+    rgbw[2] = b;
+  } else if (BRG_ORDER == order) {
+    rgbw[0] = b;
+    rgbw[1] = r;
+    rgbw[2] = g;
+  } else if (GBR_ORDER == order) {
+    rgbw[0] = g;
+    rgbw[1] = b;
+    rgbw[2] = r;
+  }
+}
+
+// Convert RGB Color to HSV Color
+void RGB2HSV(uint8_t r, uint8_t g, uint8_t b, float hsv[3]) {
+  const float rf = static_cast<float>(r) / 255.0f;
+  const float gf = static_cast<float>(g) / 255.0f;
+  const float bf = static_cast<float>(b) / 255.0f;
+  float maxval   = rf;
+
+  if (gf > maxval) { maxval = gf; }
+
+  if (bf > maxval) { maxval = bf; }
+  float minval = rf;
+
+  if (gf < minval) { minval = gf; }
+
+  if (bf < minval) { minval = bf; }
+  float h = 0.0f, s, v = maxval;
+  float f = maxval - minval;
+
+  s = maxval == 0.0f ? 0.0f : f / maxval;
+
+  if (maxval == minval) {
+    h = 0.0f; // achromatic
+  } else {
+    if (maxval == rf) {
+      h = (gf - bf) / f + (gf < bf ? 6.0f : 0.0f);
+    } else if (maxval == gf) {
+      h = (bf - rf) / f + 2.0f;
+    } else if (maxval == bf) {
+      h = (rf - gf) / f + 4.0f;
+    }
+    h /= 6.0f;
   }
 
-  rgbw[0] = r;
-  rgbw[1] = g;
-  rgbw[2] = b;
-  rgbw[3] = w;
+  hsv[0] = h * 360.0f;
+  hsv[1] = s * 255.0f;
+  hsv[2] = v * 255.0f;
 }
 
-// Simple bitwise get/set functions
+float getCPUload()         { return 100.0f - Scheduler.getIdleTimePct(); }
 
-uint8_t get8BitFromUL(uint32_t number, uint8_t bitnr) {
-  return (number >> bitnr) & 0xFF;
-}
+int   getLoopCountPerSec() { return loopCounterLast / 30; }
 
-void set8BitToUL(uint32_t& number, uint8_t bitnr, uint8_t value) {
-  uint32_t mask     = (0xFFUL << bitnr);
-  uint32_t newvalue = ((value << bitnr) & mask);
-
-  number = (number & ~mask) | newvalue;
-}
-
-uint8_t get4BitFromUL(uint32_t number, uint8_t bitnr) {
-  return (number >> bitnr) &  0x0F;
-}
-
-void set4BitToUL(uint32_t& number, uint8_t bitnr, uint8_t value) {
-  uint32_t mask     = (0x0FUL << bitnr);
-  uint32_t newvalue = ((value << bitnr) & mask);
-
-  number = (number & ~mask) | newvalue;
-}
-
-uint8_t get3BitFromUL(uint32_t number, uint8_t bitnr) {
-  return (number >> bitnr) &  0x07;
-}
-
-void set3BitToUL(uint32_t& number, uint8_t bitnr, uint8_t value) {
-  uint32_t mask     = (0x07UL << bitnr);
-  uint32_t newvalue = ((value << bitnr) & mask);
-
-  number = (number & ~mask) | newvalue;
-}
-
-uint8_t get2BitFromUL(uint32_t number, uint8_t bitnr) {
-  return (number >> bitnr) &  0x03;
-}
-
-void set2BitToUL(uint32_t& number, uint8_t bitnr, uint8_t value) {
-  uint32_t mask     = (0x03UL << bitnr);
-  uint32_t newvalue = ((value << bitnr) & mask);
-
-  number = (number & ~mask) | newvalue;
-}
-
-float getCPUload() {
-  return 100.0f - Scheduler.getIdleTimePct();
-}
-
-int getLoopCountPerSec() {
-  return loopCounterLast / 30;
-}
-
-int getUptimeMinutes() {
-  return wdcounter / 2;
-}
+int   getUptimeMinutes()   { return wdcounter / 2; }
 
 /******************************************************************************
  * scan an int array of specified size for a value
  *****************************************************************************/
-bool intArrayContains(const int arraySize, const int array[], const int& value) {
+bool  intArrayContains(const int arraySize, const int array[], const int& value) {
   for (int i = 0; i < arraySize; i++) {
     if (array[i] == value) { return true; }
   }
@@ -491,6 +609,7 @@ bool intArrayContains(const int arraySize, const uint8_t array[], const uint8_t&
 }
 
 #ifndef BUILD_NO_RAM_TRACKER
+
 void logMemUsageAfter(const __FlashStringHelper *function, int value) {
   // Store free memory in an int, as subtracting may sometimes result in negative value.
   // The recorded used memory is not an exact value, as background (or interrupt) tasks may also allocate or free heap memory.
@@ -499,7 +618,8 @@ void logMemUsageAfter(const __FlashStringHelper *function, int value) {
 
   if (loglevelActiveFor(LOG_LEVEL_DEBUG)) {
     String log;
-    if (log.reserve(128)) {
+
+    if (reserve_special(log, 128)) {
       log  = F("After ");
       log += function;
 
@@ -507,11 +627,13 @@ void logMemUsageAfter(const __FlashStringHelper *function, int value) {
         log += value;
       }
 
-      while (log.length() < 30) { log += ' '; }
+      while (log.length() < 30) { log += ' ';
+      }
       log += F("Free mem after: ");
       log += freemem_end;
 
-      while (log.length() < 55) { log += ' '; }
+      while (log.length() < 55) { log += ' ';
+      }
       log += F("diff: ");
       log += last_freemem - freemem_end;
       addLogMove(LOG_LEVEL_DEBUG, log);

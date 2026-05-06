@@ -13,7 +13,9 @@ Type: |P039_type|
 
 Name: |P039_name|
 
-Status: |P039_status|
+Status ESP32: |P039_status|
+
+Status ESP8266: |P039_status_lb|
 
 GitHub: |P039_github|_
 
@@ -54,7 +56,7 @@ Description
 This Plugin reads the data from Thermocouples and Resistor Temperature Detector sensors. You have to use an Adapter Board with a respective 
 adapter/converter in order to read the values. Take a look at the usual sources to find such boards.
 
-You can only use ESP8266 boards which expose the SPI Interface. This Plugin uses only the Hardware SPI Interface - no software SPI at the moment.
+You can use any board which expose the SPI Interface. This Plugin uses only the selected SPI Interface.
 Nevertheless you need at least 3 Pins to use SPI. So using an very simple ESP-01 is unfortunately no option.
 
 **Basic Information on Thermocouples**
@@ -68,7 +70,7 @@ Wiring
 
 Basic Information on SPI Bus you can find in `Wikipedia: SPI Bus <https://en.wikipedia.org/wiki/Serial_Peripheral_Interface>`_
 
-You need an ESP8266 device with accessible SPI Pins. These Pins are:
+You need an **ESP8266** device with accessible SPI Pins. These Pins are:
 
 ====  =============  ======  ========  =========================================================================
 Name  Description    PIO     NodeMCU   Notes
@@ -80,6 +82,8 @@ CS    Chip Select    GPIO15  D8        Hardware SPI (CS is configurable through 
 ====  =============  ======  ========  =========================================================================
 
 .. note:: Write Access to device registers is required for MAX 31856 and MAX 31865 devices so far.
+
+For **ESP32** you can use any VSPI, HSPI or User Defined configuration, as the GPIO multiplexer in ESP32 chips can handle any GPIO pin with Input and Output capability for SPI.
 
 Supported Hardware
 ------------------
@@ -342,6 +346,14 @@ For LM7x device family you have multiple options to be configured.
 
 .. note:: At the given point in time LM7x device family is only supported experimental. Communication is tested to be present, but correct reading of values is not proven, due to missing hardware for testing.
 
+
+Value validation
+----------------
+
+.. image:: P039_LowTemperatureThreshold.png
+  :width: 600
+
+* **Low temperature threshold**: To avoid sending out unrealistic temperatures when the sensor is still initializing and not yet returning valid temperatures, a Low threshold can be configured, that will result in lower values *not* being seen (and sent to controllers) as valid. Default is 0 K (-273.15°C) and the max. allowed input is 1000.0°C
 
 Generic Plugin Configuration
 ----------------------------

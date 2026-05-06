@@ -3,10 +3,8 @@
 
 #include "../Globals/Plugins.h"
 
-#include <Arduino.h>
-
-#define SWITCH_DOUBLECLICK_MIN_INTERVAL      1000
-#define SWITCH_LONGPRESS_MIN_INTERVAL        500
+#include "../Helpers/_Plugin_Helper_GPIO.h"
+#include "../../ESPEasy_common.h"
 
 
 void SwitchWebformLoad(

@@ -1,7 +1,7 @@
 #ifndef DATATYPES_ESPEASYFILETYPE_H
 #define DATATYPES_ESPEASYFILETYPE_H
 
-#include <Arduino.h>
+#include "../../ESPEasy_common.h"
 
 struct FileType {
   enum Enum : short {
@@ -10,8 +10,9 @@ struct FileType {
     RULES_TXT,
     NOTIFICATION_DAT,
     PROVISIONING_DAT,
-    FIRMWARE,
-
+#if FEATURE_STORE_CREDENTIALS_SEPARATE_FILE
+    DEV_SECURITY_DAT,
+#endif
     MAX_FILETYPE
   };
 };

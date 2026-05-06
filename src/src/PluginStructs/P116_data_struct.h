@@ -4,18 +4,37 @@
 #include "../../_Plugin_Helper.h"
 #ifdef USES_P116
 
-# include <Adafruit_GFX.h>                  // include Adafruit graphics library
-# include <Adafruit_ST77xx.h>               // include Adafruit ST77xx TFT library
-# include <Adafruit_ST7735.h>               // include Adafruit ST7735 TFT library
-# include <Adafruit_ST7789.h>               // include Adafruit ST7789 TFT library
-# include <Adafruit_ST7796S_kbv.h>          // include Adafruit ST7796 TFT library
+# include <Adafruit_GFX.h>         // include Adafruit graphics library
+# include <Adafruit_ST77xx.h>      // include Adafruit ST77xx TFT library
+# include <Adafruit_ST7735.h>      // include Adafruit ST7735 TFT library
+# include <Adafruit_ST7789.h>      // include Adafruit ST7789 TFT library
+# include <Adafruit_ST7796S_kbv.h> // include Adafruit ST7796 TFT library
+
+# if defined(ST7789_EXTRA_INIT) && !ST7789_EXTRA_INIT
+#  define P116_EXTRA_ST7789 0      // This will get disabled for ESP8266 in Adafruit_ST7789.h
+# endif // if defined(ST7789_EXTRA_INIT) && !ST7789_EXTRA_INIT
+# if defined(LIMIT_BUILD_SIZE) and !defined(P116_EXTRA_ST7789)
+#  define P116_EXTRA_ST7789 0
+# endif // if defined(LIMIT_BUILD_SIZE) and !defined(P116_EXTRA_ST7789)
+# ifndef P116_EXTRA_ST7789
+#  define P116_EXTRA_ST7789 0 // Disabled by default (not verified on any hardware yet)
+# endif // ifndef P116_EXTRA_ST7789
+# if defined(ST7735_EXTRA_INIT) && !ST7735_EXTRA_INIT
+#  define P116_EXTRA_ST7735 0 // This will get disabled for ESP8266 in Adafruit_ST7735.h
+# endif // if defined(ST7735_EXTRA_INIT) && !ST7735_EXTRA_INIT
+# if defined(LIMIT_BUILD_SIZE) and !defined(P116_EXTRA_ST7789)
+#  define P116_EXTRA_ST7735 0
+# endif // if defined(LIMIT_BUILD_SIZE) and !defined(P116_EXTRA_ST7735)
+# ifndef P116_EXTRA_ST7735
+#  define P116_EXTRA_ST7735 1
+# endif // ifndef P116_EXTRA_ST7735
 
 # include "../Helpers/AdafruitGFX_helper.h" // Use Adafruit graphics helper object
 # include "../CustomBuild/StorageLayout.h"
 
-# define P116_Nlines           24           // The number of different lines which can be displayed
+# define P116_Nlines           24 // The number of different lines which can be displayed
 # define P116_Nchars           60
-# define P116_DebounceTreshold  5           // number of 20 msec (fifty per second) ticks before the button has settled
+# define P116_DebounceTreshold  5 // number of 20 msec (fifty per second) ticks before the button has settled
 
 // # define P116_SHOW_SPLASH                               // Enable to show splash (text)
 
@@ -24,9 +43,10 @@
 # define P116_CONFIG_TYPE               PCONFIG(2)      // Type of device
 # define P116_CONFIG_BACKLIGHT_PIN      PCONFIG(3)      // Backlight pin
 # define P116_CONFIG_BACKLIGHT_PERCENT  PCONFIG(4)      // Backlight percentage
-# define P116_CONFIG_COLORS             PCONFIG_LONG(3) // 2 Colors fit in 1 long
+# define P116_CONFIG_DEFAULT_FONT       PCONFIG(5)      // Default font
+# define P116_CONFIG_COLORS            PCONFIG_ULONG(3) // 2 Colors fit in 1 long
 
-# define P116_CONFIG_FLAGS              PCONFIG_LONG(0) // All flags
+# define P116_CONFIG_FLAGS             PCONFIG_ULONG(0) // All flags
 # define P116_CONFIG_FLAG_NO_WAKE       0               // Flag: Don't wake display
 # define P116_CONFIG_FLAG_INVERT_BUTTON 1               // Flag: Inverted button state
 # define P116_CONFIG_FLAG_CLEAR_ON_EXIT 2               // Flag: Clear display on exit
@@ -37,12 +57,14 @@
 # define P116_CONFIG_FLAG_TYPE          16              // Flag-offset to store 4 bits for Hardwaretype, uses bits 16, 17, 18 and 19
 # define P116_CONFIG_FLAG_CMD_TRIGGER   20              // Flag-offset to store 4 bits for Command trigger, uses bits 20, 21, 22 and 23
 # define P116_CONFIG_FLAG_BACK_FILL     28              // Flag: Background fill when printing text
+# define P116_CONFIG_FLAG_TYPE2         29              // Flag-offset to store 2 more bits for Hardwaretype, uses bits 29 and 30
 
 // Getters
 # define P116_CONFIG_FLAG_GET_MODE          (get4BitFromUL(P116_CONFIG_FLAGS, P116_CONFIG_FLAG_MODE))
 # define P116_CONFIG_FLAG_GET_ROTATION      (get4BitFromUL(P116_CONFIG_FLAGS, P116_CONFIG_FLAG_ROTATION))
 # define P116_CONFIG_FLAG_GET_FONTSCALE     (get4BitFromUL(P116_CONFIG_FLAGS, P116_CONFIG_FLAG_FONTSCALE))
-# define P116_CONFIG_FLAG_GET_TYPE          (get4BitFromUL(P116_CONFIG_FLAGS, P116_CONFIG_FLAG_TYPE))
+# define P116_CONFIG_FLAG_GET_TYPE          (get4BitFromUL(P116_CONFIG_FLAGS, P116_CONFIG_FLAG_TYPE) \
+                                             + (get2BitFromUL(P116_CONFIG_FLAGS, P116_CONFIG_FLAG_TYPE2) << 4))
 # define P116_CONFIG_FLAG_GET_CMD_TRIGGER   (get4BitFromUL(P116_CONFIG_FLAGS, P116_CONFIG_FLAG_CMD_TRIGGER))
 # define P116_CONFIG_GET_COLOR_FOREGROUND   (P116_CONFIG_COLORS & 0xFFFF)
 # define P116_CONFIG_GET_COLOR_BACKGROUND   ((P116_CONFIG_COLORS >> 16) & 0xFFFF)
@@ -68,29 +90,39 @@ enum class ST77xx_type_e : uint8_t {
   ST7735s_128x128   = 0,
   ST7735s_128x160   = 1u,
   ST7735s_80x160    = 2u,
-  ST7735s_80x160_M5 = 8u,
   ST7789vw_240x320  = 3u,
   ST7789vw_240x240  = 4u,
   ST7789vw_240x280  = 5u,
   ST7789vw_135x240  = 6u,
   ST7796s_320x480   = 7u,
-  ST77xx_MAX        = 9u // must be last value in enum
+  ST7735s_80x160_M5 = 8u,
+  # if P116_EXTRA_ST7789
+  ST7789vw1_135x240 = 9u,
+  ST7789vw2_135x240 = 10u,
+  ST7789vw3_135x240 = 11u,
+  # endif // if P116_EXTRA_ST7789
+  # if P116_EXTRA_ST7735
+  ST7735s_135x240 = 12u,
+  ST7735s_172x320 = 13u,
+  ST77xxs_170x320 = 14u,
+  ST77xxs_240x320 = 15u,
+  ST77xxs_240x280 = 16u,
+  # endif // if P116_EXTRA_ST7735
 };
 
 enum class P116_CommandTrigger : uint8_t {
-  tft = 0u,
-  st77xx,
-  st7735,
-  st7789,
-  st7796,
-  MAX // Keep as last item!
+  tft    = 0u,
+  st77xx = 1u,
+  st7735 = 2u,
+  st7789 = 3u,
+  st7796 = 4u,
 };
 
-const __FlashStringHelper* ST77xx_type_toString(ST77xx_type_e device);
-const __FlashStringHelper* P116_CommandTrigger_toString(P116_CommandTrigger cmd);
-void                       ST77xx_type_toResolution(ST77xx_type_e device,
-                                                    uint16_t    & x,
-                                                    uint16_t    & y);
+const __FlashStringHelper* ST77xx_type_toString(const ST77xx_type_e& device);
+const __FlashStringHelper* P116_CommandTrigger_toString(const P116_CommandTrigger& cmd);
+void                       ST77xx_type_toResolution(const ST77xx_type_e& device,
+                                                    uint16_t           & x,
+                                                    uint16_t           & y);
 
 struct P116_data_struct : public PluginTaskData_base {
 public:
@@ -105,7 +137,12 @@ public:
                    String              commandTrigger,
                    uint16_t            fgcolor      = ADAGFX_WHITE,
                    uint16_t            bgcolor      = ADAGFX_BLACK,
-                   bool                textBackFill = true);
+                   bool                textBackFill = true
+                   # if                ADAGFX_FONTS_INCLUDED
+                   ,
+                   const uint8_t defaultFontId = 0
+                   # endif // if ADAGFX_FONTS_INCLUDED
+                   );
   P116_data_struct() = delete;
   virtual ~P116_data_struct();
 
@@ -114,6 +151,10 @@ public:
   bool plugin_read(struct EventStruct *event);
   bool plugin_write(struct EventStruct *event,
                     const String      & string);
+  # if ADAGFX_ENABLE_GET_CONFIG_VALUE
+  bool plugin_get_config_value(struct EventStruct *event,
+                               String            & string);
+  # endif // if ADAGFX_ENABLE_GET_CONFIG_VALUE
   bool plugin_ten_per_second(struct EventStruct *event);
   bool plugin_once_a_second(struct EventStruct *event);
 
@@ -156,6 +197,9 @@ private:
   uint16_t            _fgcolor;
   uint16_t            _bgcolor;
   bool                _textBackFill;
+  # if ADAGFX_FONTS_INCLUDED
+  uint8_t _defaultFontId;
+  # endif // if ADAGFX_FONTS_INCLUDED
 
   String _commandTriggerCmd;
 
@@ -166,6 +210,10 @@ private:
 
   int8_t _leftMarginCompensation = 0; // Not settable yet
   int8_t _topMarginCompensation  = 0;
+
+  String strings[P116_Nlines];
+  bool   stringsLoaded     = false;
+  bool   stringsHasContent = false;
 };
 
 

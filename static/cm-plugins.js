@@ -13,7 +13,7 @@ var isSame;
     anyword(CodeMirror);
 })(function (CodeMirror) {
   "use strict";
-  var WORD = /[\w?#.,%]+/, RANGE = 500;
+  var WORD = /[\w?.,%]+/, RANGE = 500;
   CodeMirror.registerHelper("hint", "anyword", function (editor, options) {
     var word = options && options.word || WORD;
     var range = options && options.range || RANGE;
@@ -29,7 +29,7 @@ var isSame;
       return element.toLowerCase() === curWord;
     });
     var list = options && options.list || [], seen = {};
-    var re = new RegExp(word.source, "g");
+    var re = new RegExp(word.source, "gi");
     for (var dir = -1; dir <= 1; dir += 2) {
       var line = cur.line, endLine = Math.min(Math.max(line + dir * range, editor.firstLine()), editor.lastLine()) + dir;
       for (; line != endLine; line += dir) {
@@ -37,8 +37,9 @@ var isSame;
         text = text.replace(/\/{2}.*/g, ''); //filter out comments CXD
         text = text.replace(/(=|-|\+|\*|<|>)\d+/g, ''); //filter out numbers CXD
         var replaceK = text.match(/\w+(?:,(\S+)){2}/);
-        if (replaceK) {text = text.replace(replaceK[1], ' ' + replaceK[1]);} //filter out everything after second comma
+        if (replaceK) { text = text.replace(replaceK[1], ' ' + replaceK[1]); } //filter out everything after second comma
         //and put a space between CXD
+        if (text.includes("#")) { re = new RegExp(/[\w?#.,%]+/, "gi"); } //regain old bahaviour of "word1#word2" suggestions
         while (m = re.exec(text)) {
           if (line == cur.line && m[0].toLowerCase() === curWord) continue;
           if ((!curWord || m[0].toLowerCase().lastIndexOf(curWord, 0) == 0) && !Object.prototype.hasOwnProperty.call(seen, m[0])) {
@@ -634,11 +635,22 @@ var isSame;
 
 
 // This is from the file search.js-------------------------------------------------------------------------
+// CodeMirror, copyright (c) by Marijn Haverbeke and others
+// Distributed under an MIT license: https://codemirror.net/5/LICENSE
+
+// Define search commands. Depends on dialog.js or another
+// implementation of the openDialog method.
+
+// Replace works a little oddly -- it will do the replace on the next
+// Ctrl-G (or whatever is bound to findNext) press. You prevent a
+// replace by making sure the match is no longer selected when hitting
+// Ctrl-G.
+
 (function (search) {
   if (typeof exports == "object" && typeof module == "object") // CommonJS
     search(require("../../lib/codemirror"), require("./searchcursor"), require("../dialog/dialog"));
   else if (typeof define == "function" && define.amd) // AMD
-    define(["../../lib/codemirror", "./searchcursor", "../dialog/dialog"], mod);
+    define(["../../lib/codemirror", "./searchcursor", "../dialog/dialog"], search);
   else // Plain browser env
     search(CodeMirror);
 })(function (CodeMirror) {
@@ -687,13 +699,14 @@ var isSame;
     return cm.getSearchCursor(query, pos, { caseFold: queryCaseInsensitive(query), multiline: true });
   }
 
-  function persistentDialog(cm, text, deflt, onEnter, onKeyDown) {
+  //cXd:changed to live view (https://github.com/codemirror/codemirror5/issues/4496#issuecomment-332658411)
+  function persistentDialog(cm, text, deflt, onEnter, onKeyUp) {
     cm.openDialog(text, onEnter, {
       value: deflt,
       selectValueOnOpen: true,
       closeOnEnter: false,
       onClose: function () { clearSearch(cm); },
-      onKeyDown: onKeyDown,
+      onKeyUp: onKeyUp,
       bottom: cm.options.search.bottom
     });
   }
@@ -766,8 +779,15 @@ var isSame;
             (hiding = dialog).style.opacity = .4
         })
       };
+      //cXd:changed to live view (https://github.com/codemirror/codemirror5/issues/4496#issuecomment-332658411)
       persistentDialog(cm, getQueryDialog(cm), q, searchNext, function (event, query) {
         var keyName = CodeMirror.keyName(event)
+        if (keyName != 'Enter' && query != state.queryText) {
+          startSearch(cm, state, query);
+          cm.execCommand('goLineUp');
+          state.posFrom = state.posTo = cm.getCursor();
+          findNext(cm, event.shiftKey);
+        }
         var extra = cm.getOption('extraKeys'), cmd = (extra && extra[keyName]) || CodeMirror.keyMap[cm.getOption("keyMap")][keyName]
         if (cmd == "findNext" || cmd == "findPrev" ||
           cmd == "findPersistentNext" || cmd == "findPersistentPrev") {
@@ -793,19 +813,35 @@ var isSame;
       });
     }
   }
-
+  //cXd:changed for adding highlight to a match
   function findNext(cm, rev, callback) {
     cm.operation(function () {
-      var state = getSearchState(cm);
-      var cursor = getSearchCursor(cm, state.query, rev ? state.posFrom : state.posTo);
+      const state = getSearchState(cm);
+      // store the markText reference on the editor instance
+      function highlightCurrentMatch(from, to) {
+        if (cm.__searchNextHighlight) {
+          cm.__searchNextHighlight.clear();
+        }
+        cm.__searchNextHighlight = cm.markText(from, to, {
+          className: 'search-next-highlight'
+        });
+      }
+
+      let cursor = getSearchCursor(cm, state.query, rev ? state.posFrom : state.posTo);
       if (!cursor.find(rev)) {
         cursor = getSearchCursor(cm, state.query, rev ? CodeMirror.Pos(cm.lastLine()) : CodeMirror.Pos(cm.firstLine(), 0));
         if (!cursor.find(rev)) return;
       }
+
+      //cXd Highlight current match
+      highlightCurrentMatch(cursor.from(), cursor.to());
+
       cm.setSelection(cursor.from(), cursor.to());
-      cm.scrollIntoView({ from: cursor.from(), to: cursor.to() }, 20);
-      state.posFrom = cursor.from(); state.posTo = cursor.to();
-      if (callback) callback(cursor.from(), cursor.to())
+      //cm.scrollIntoView({ from: cursor.from(), to: cursor.to() }, 20);
+      cm.scrollTo(null, cm.charCoords(cursor.from(), 'local').top); // cXd scroll line to top
+      state.posFrom = cursor.from();
+      state.posTo = cursor.to();
+      if (callback) callback(cursor.from(), cursor.to());
     });
   }
 
@@ -875,41 +911,68 @@ var isSame;
     });
   }
 
+  //cXd:changed for adding highlight to a match
   function replace(cm, all) {
     if (cm.getOption("readOnly")) return;
+
+    // store the markText reference on the editor instance
+    function highlightCurrentMatch(from, to) {
+      if (cm.__searchNextHighlight) {
+        cm.__searchNextHighlight.clear();
+      }
+      cm.__searchNextHighlight = cm.markText(from, to, {
+        className: 'search-next-highlight'
+      });
+    }
+
     var query = cm.getSelection() || getSearchState(cm).lastQuery;
-    var dialogText = all ? cm.phrase("Replace all:") : cm.phrase("Replace:")
+    var dialogText = all ? cm.phrase("Replace all:") : cm.phrase("Replace:");
     var fragment = el("", null,
       el("span", { className: "CodeMirror-search-label" }, dialogText),
-      getReplaceQueryDialog(cm))
+      getReplaceQueryDialog(cm));
+
     dialog(cm, fragment, dialogText, query, function (query) {
       if (!query) return;
       query = parseQuery(query);
+
       dialog(cm, getReplacementQueryDialog(cm), cm.phrase("Replace with:"), "", function (text) {
-        text = parseString(text)
+        text = parseString(text);
+
         if (all) {
-          replaceAll(cm, query, text)
+          replaceAll(cm, query, text);
         } else {
           clearSearch(cm);
           var cursor = getSearchCursor(cm, query, cm.getCursor("from"));
+
           var advance = function () {
             var start = cursor.from(), match;
+
             if (!(match = cursor.findNext())) {
               cursor = getSearchCursor(cm, query);
               if (!(match = cursor.findNext()) ||
                 (start && cursor.from().line == start.line && cursor.from().ch == start.ch)) return;
             }
+
             cm.setSelection(cursor.from(), cursor.to());
-            cm.scrollIntoView({ from: cursor.from(), to: cursor.to() });
-            confirmDialog(cm, getDoReplaceConfirm(cm), cm.phrase("Replace?"),
-              [function () { doReplace(match); }, advance,
-              function () { replaceAll(cm, query, text) }]);
+            //cm.scrollIntoView({ from: cursor.from(), to: cursor.to() });
+            cm.scrollTo(null, cm.charCoords(cursor.from(), 'local').top); // cXd scroll line to top
+            highlightCurrentMatch(cursor.from(), cursor.to());
+
+            confirmDialog(cm, getDoReplaceConfirm(cm), cm.phrase("Replace?"), [
+              function () { doReplace(match); },
+              advance,
+              function () {
+                replaceAll(cm, query, text);
+              }
+            ]);
           };
+
           var doReplace = function (match) {
             cursor.replace(typeof query == "string" ? text :
               text.replace(/\$(\d)/g, function (_, i) { return match[i]; }));
             advance();
           };
+
           advance();
         }
       });
@@ -931,11 +994,12 @@ var isSame;
 
 // This is from the file searchcursor.js-------------------------------------------------------------------------
 
+
 (function (searchcursor) {
   if (typeof exports == "object" && typeof module == "object") // CommonJS
     searchcursor(require("../../lib/codemirror"))
   else if (typeof define == "function" && define.amd) // AMD
-    define(["../../lib/codemirror"], mod)
+    define(["../../lib/codemirror"], searchcursor)
   else // Plain browser env
     searchcursor(CodeMirror)
 })(function (CodeMirror) {
@@ -1254,16 +1318,20 @@ var isSame;
 
 // This is from the file dialog.js-------------------------------------------------------------------------
 
+// Open simple dialogs on top of an editor. Relies on dialog.css.
+
 (function (dialog) {
   if (typeof exports == "object" && typeof module == "object") // CommonJS
     dialog(require("../../lib/codemirror"));
   else if (typeof define == "function" && define.amd) // AMD
-    define(["../../lib/codemirror"], mod);
+    define(["../../lib/codemirror"], dialog);
   else // Plain browser env
     dialog(CodeMirror);
+
 })(function (CodeMirror) {
   function dialogDiv(cm, template, bottom) {
-    var wrap = cm.getWrapperElement();
+    //var wrap = cm.getWrapperElement();   changed by cxd to get searchfield out of div
+    var wrap = document.body;
     var dialog;
     dialog = wrap.appendChild(document.createElement("div"));
     if (bottom)
@@ -1276,7 +1344,9 @@ var isSame;
     } else { // Assuming it's a detached DOM element.
       dialog.appendChild(template);
     }
+    // Append the dialog to <body> instead of inside the clipped container
     CodeMirror.addClass(wrap, 'dialog-opened');
+
     return dialog;
   }
 

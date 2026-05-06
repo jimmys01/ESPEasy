@@ -30,13 +30,13 @@ bool CPlugin_017(CPlugin::Function function, struct EventStruct *event, String& 
   {
     case CPlugin::Function::CPLUGIN_PROTOCOL_ADD:
     {
-      Protocol[++protocolCount].Number     = CPLUGIN_ID_017;
-      Protocol[protocolCount].usesMQTT     = false;
-      Protocol[protocolCount].usesTemplate = false;
-      Protocol[protocolCount].usesAccount  = false;
-      Protocol[protocolCount].usesPassword = false;
-      Protocol[protocolCount].usesID       = false;
-      Protocol[protocolCount].defaultPort  = 10051;
+      ProtocolStruct& proto = getProtocolStruct(event->idx); //      = CPLUGIN_ID_017;
+      proto.usesMQTT     = false;
+      proto.usesTemplate = false;
+      proto.usesAccount  = false;
+      proto.usesPassword = false;
+      proto.usesID       = false;
+      proto.defaultPort  = 10051;
       break;
     }
 
@@ -63,9 +63,18 @@ bool CPlugin_017(CPlugin::Function function, struct EventStruct *event, String& 
       if (C017_DelayHandler == nullptr) {
         break;
       }
+      if (C017_DelayHandler->queueFull(event->ControllerIndex)) {
+        break;
+      }
 
-      success = C017_DelayHandler->addToQueue(C017_queue_element(event));
-      Scheduler.scheduleNextDelayQueue(ESPEasy_Scheduler::IntervalTimer_e::TIMER_C017_DELAY_QUEUE, C017_DelayHandler->getNextScheduleTime());
+      constexpr unsigned size = sizeof(C017_queue_element);
+      void *ptr               = special_calloc(1, size);
+    
+      if (ptr != nullptr) {
+        UP_C017_queue_element  element(new (ptr) C017_queue_element(event));
+        success = C017_DelayHandler->addToQueue(std::move(element));
+      }
+      Scheduler.scheduleNextDelayQueue(SchedulerIntervalTimer_e::TIMER_C017_DELAY_QUEUE, C017_DelayHandler->getNextScheduleTime());
       break;
     }
 
@@ -84,9 +93,9 @@ bool CPlugin_017(CPlugin::Function function, struct EventStruct *event, String& 
 
 // Uncrustify may change this into multi line, which will result in failed builds
 // *INDENT-OFF*
-bool do_process_c017_delay_queue(int controller_number, const C017_queue_element& element, ControllerSettingsStruct& ControllerSettings)
+bool do_process_c017_delay_queue(cpluginID_t cpluginID, const Queue_element_base& element_base, ControllerSettingsStruct& ControllerSettings) {
+  const C017_queue_element& element = static_cast<const C017_queue_element&>(element_base);
 // *INDENT-ON*
-{
   if (element.valueCount == 0) {
     return true; // exit if we don't have anything to send.
   }
@@ -98,7 +107,7 @@ bool do_process_c017_delay_queue(int controller_number, const C017_queue_element
 
   WiFiClient client;
 
-  if (!try_connect_host(controller_number, client, ControllerSettings, F("ZBX  : ")))
+  if (!try_connect_host(cpluginID, client, ControllerSettings, F("ZBX  : ")))
   {
     return false;
   }
@@ -116,12 +125,12 @@ bool do_process_c017_delay_queue(int controller_number, const C017_queue_element
     // Populate JSON with the data
     for (uint8_t i = 0; i < element.valueCount; i++)
     {
-      const String taskValueName = getTaskValueName(element.TaskIndex, i);
+      const String taskValueName = Cache.getTaskDeviceValueName(element._taskIndex, i);
       if (taskValueName.isEmpty()) {
         continue;                                    // Zabbix will ignore an empty key anyway
       }
       JsonObject block = data.createNestedObject();
-      block[F("host")] = Settings.Name;              // Zabbix hostname, Unit Name for the ESP easy
+      block[F("host")] = Settings.getName();     // Zabbix hostname, Unit Name for the ESP easy
       block[F("key")]  = taskValueName;              // Zabbix item key // Value Name for the ESP easy
       float value = 0.0f;
       validFloatFromString(element.txt[i], value);
@@ -135,7 +144,7 @@ bool do_process_c017_delay_queue(int controller_number, const C017_queue_element
 
   uint64_t payload_len = JSON_packet_content.length();
 
-  // addLog(LOG_LEVEL_INFO, String(F("ZBX: ")) + JSON_packet_content);
+  // addLog(LOG_LEVEL_INFO, concat(F("ZBX: "), JSON_packet_content));
   // Send the packet
   client.write(packet_header,               sizeof(packet_header) - 1);
   client.write(reinterpret_cast<const char *>(&payload_len),        sizeof(payload_len));

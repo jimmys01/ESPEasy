@@ -13,6 +13,11 @@
 
 // #define PLUGIN_096_MAX_DISPLAY 1 // Unused
 
+/** Changelog:
+ * 2025-08-13 tonhuisman: Enable use of secondary SPI bus
+ * 2025-08-13 tonhuisman: Start changelog
+ */
+
 /* README.MD
 
 
@@ -114,13 +119,13 @@
 
 # ifndef P096_USE_ADA_GRAPHICS
 
-// declare functions for using default value parameters
-void Plugin_096_printText(const char    *string,
-                          int            X,
-                          int            Y,
-                          unsigned int   textSize = 1,
-                          unsigned short color    = EPD_WHITE,
-                          unsigned short bkcolor  = EPD_BLACK);
+// // declare functions for using default value parameters
+// void Plugin_096_printText(const char    *string,
+//                           int            X,
+//                           int            Y,
+//                           unsigned int   textSize = 1,
+//                           unsigned short color    = EPD_WHITE,
+//                           unsigned short bkcolor  = EPD_BLACK);
 # endif // ifndef P096_USE_ADA_GRAPHICS
 
 // Define the default values for both ESP32/lolin32 and D1 Mini
@@ -135,8 +140,8 @@ void Plugin_096_printText(const char    *string,
 # else // ifdef ESP32
 
 // for D1 Mini with shield connection
-  #  define EPD_CS  16 // D0
-  #  define EPD_DC  15 // D8
+  #  define EPD_CS  16  // D0
+  #  define EPD_DC  15  // D8
   #  define EPD_RST -1  // can set to -1 and share with microcontroller Reset!
   #  define EPD_BUSY -1 // can set to -1 to not use a pin (will wait a fixed delay)
 # endif // ifdef ESP32
@@ -175,24 +180,16 @@ boolean Plugin_096(uint8_t function, struct EventStruct *event, String& string)
   {
     case PLUGIN_DEVICE_ADD:
     {
-      Device[++deviceCount].Number           = PLUGIN_ID_096;
-      Device[deviceCount].Type               = DEVICE_TYPE_SPI3;
-      Device[deviceCount].VType              = Sensor_VType::SENSOR_TYPE_NONE;
-      Device[deviceCount].Ports              = 0;
-      Device[deviceCount].PullUpOption       = false;
-      Device[deviceCount].InverseLogicOption = false;
-      Device[deviceCount].FormulaOption      = false;
+      auto& dev = Device[++deviceCount];
+      dev.Number = PLUGIN_ID_096;
+      dev.Type   = DEVICE_TYPE_SPI3;
+      dev.VType  = Sensor_VType::SENSOR_TYPE_NONE;
       # if P096_USE_EXTENDED_SETTINGS
-      Device[deviceCount].ValueCount    = 2;
-      Device[deviceCount].TimerOption   = true;
-      Device[deviceCount].TimerOptional = true;
-      # else // if P096_USE_EXTENDED_SETTINGS
-      Device[deviceCount].ValueCount  = 0;
-      Device[deviceCount].TimerOption = false;
+      dev.ValueCount    = 2;
+      dev.TimerOption   = true;
+      dev.TimerOptional = true;
       # endif // if P096_USE_EXTENDED_SETTINGS
-      Device[deviceCount].SendDataOption = false;
-
-      success = true;
+      dev.SpiBusSelect = true;
       break;
     }
 
@@ -248,15 +245,14 @@ boolean Plugin_096(uint8_t function, struct EventStruct *event, String& string)
 
     case PLUGIN_WEBFORM_SHOW_GPIO_DESCR:
     {
-      string  = F("EPD BUSY: ");
-      string += formatGpioLabel(PIN(3), false);
+      string  = concat(F("EPD BUSY: "), formatGpioLabel(PIN(3), false));
       success = true;
       break;
     }
 
     case PLUGIN_WEBFORM_LOAD:
     {
-      addFormPinSelect(PinSelectPurpose::Generic_output, formatGpioName_output(F("EPD BUSY")), F("p096_epd_busy"), PIN(3));
+      addFormPinSelect(PinSelectPurpose::Generic_output, formatGpioName_output(F("EPD BUSY")), F("_epd_busy"), PIN(3));
 
       # if P096_USE_EXTENDED_SETTINGS
 
@@ -282,24 +278,28 @@ boolean Plugin_096(uint8_t function, struct EventStruct *event, String& string)
           static_cast<int>(EPD_type_e::EPD_WS2IN7)
           #  endif // if P096_USE_WAVESHARE_2IN7
         };
-        addFormSelector(F("eInk display model"),
-                        F("p096_type"),
-                        static_cast<int>(EPD_type_e::EPD_MAX),
-                        options4,
-                        optionValues4,
-                        P096_CONFIG_FLAG_GET_DISPLAYTYPE);
+        constexpr size_t optionCount = NR_ELEMENTS(optionValues4);
+        const FormSelectorOptions selector(
+          optionCount,
+          options4,
+          optionValues4);
+        selector.addFormSelector(F("eInk display model"),
+                                 F("_type"),
+                                 P096_CONFIG_FLAG_GET_DISPLAYTYPE);
       }
 
       addFormSubHeader(F("Layout"));
       # endif // if P096_USE_EXTENDED_SETTINGS
 
       # ifdef P096_USE_ADA_GRAPHICS
-      AdaGFXFormRotation(F("p096_rotate"), P096_CONFIG_ROTATION);
+      AdaGFXFormRotation(F("_rotate"), P096_CONFIG_ROTATION);
       # else // ifdef P096_USE_ADA_GRAPHICS
       {
-        const __FlashStringHelper *options2[4] = { F("Normal"), F("+90&deg;"), F("+180&deg;"), F("+270&deg;") };
-        int optionValues2[4]                   = { 0, 1, 2, 3 };
-        addFormSelector(F("Rotation"), F("p096_rotate"), 4, options2, optionValues2, P096_CONFIG_ROTATION);
+        const __FlashStringHelper *options2[] = { F("Normal"), F("+90&deg;"), F("+180&deg;"), F("+270&deg;") };
+        int optionValues2[]                   = { 0, 1, 2, 3 };
+        constexpr size_t optionCount          = NR_ELEMENTS(optionValues2);
+        const FormSelectorOptions selector(optionCount, options2, optionValues2);
+        selector.addFormSelector(F("Rotation"), F("_rotate"), P096_CONFIG_ROTATION);
       }
       # endif // ifdef P096_USE_ADA_GRAPHICS
 
@@ -311,14 +311,14 @@ boolean Plugin_096(uint8_t function, struct EventStruct *event, String& string)
       if (width_ == 0) {
         width_ = 250; // default value
       }
-      addFormNumericBox(F("Width (px)"), F("p096_width"), width_, 1, 65535);
+      addFormNumericBox(F("Width (px)"), F("_width"), width_, 1, 65535);
 
       uint16_t height_ = P096_CONFIG_HEIGHT;
 
       if (height_ == 0) {
         height_ = 122; // default value
       }
-      addFormNumericBox(F("Height (px)"), F("p096_height"), height_, 1, 65535);
+      addFormNumericBox(F("Height (px)"), F("_height"), height_, 1, 65535);
       # endif // if !P096_USE_EXTENDED_SETTINGS
 
       # if P096_USE_EXTENDED_SETTINGS
@@ -340,22 +340,24 @@ boolean Plugin_096(uint8_t function, struct EventStruct *event, String& string)
           #  endif // if ADAGFX_SUPPORT_7COLOR
         };
 
-        if (P096_CONFIG_FLAG_GET_COLORDEPTH == 0) { // Enum doesn't have 0
+        if (P096_CONFIG_FLAG_GET_COLORDEPTH == 0) {                                                                // Enum doesn't have 0
           uint32_t lSettings = 0;
           set4BitToUL(lSettings, P096_CONFIG_FLAG_COLORDEPTH, static_cast<uint8_t>(AdaGFXColorDepth::Monochrome)); // Bit 20..23 Color depth
           P096_CONFIG_FLAGS = lSettings;
         }
-        addFormSelector(F("Greyscale levels"),
-                        F("p096_colorDepth"),
-                        ADAGFX_MONOCOLORS_COUNT,
-                        colorDepths,
-                        colorDepthOptions,
-                        P096_CONFIG_FLAG_GET_COLORDEPTH);
+        constexpr size_t optionCount = NR_ELEMENTS(colorDepthOptions);
+        const FormSelectorOptions selector(optionCount, colorDepths, colorDepthOptions);
+        selector.addFormSelector(F("Greyscale levels"), F("_colorDepth"),
+                                 P096_CONFIG_FLAG_GET_COLORDEPTH);
       }
 
-      AdaGFXFormTextPrintMode(F("p096_mode"), P096_CONFIG_FLAG_GET_MODE);
+      AdaGFXFormTextPrintMode(F("_mode"), P096_CONFIG_FLAG_GET_MODE);
 
-      AdaGFXFormFontScaling(F("p096_fontscale"), P096_CONFIG_FLAG_GET_FONTSCALE);
+      #  if ADAGFX_FONTS_INCLUDED
+      AdaGFXFormDefaultFont(F("deffont"), P096_CONFIG_DEFAULT_FONT);
+      #  endif // if ADAGFX_FONTS_INCLUDED
+
+      AdaGFXFormFontScaling(F("_fontscale"), P096_CONFIG_FLAG_GET_FONTSCALE);
 
       {
         const __FlashStringHelper *commandTriggers[] = { // Be sure to use all options available in the enum (except MAX)!
@@ -380,20 +382,18 @@ boolean Plugin_096(uint8_t function, struct EventStruct *event, String& string)
           static_cast<int>(P096_CommandTrigger::ws2in7)
           #  endif // if P096_USE_WAVESHARE_2IN7
         };
-        addFormSelector(F("Write Command trigger"),
-                        F("p096_commandtrigger"),
-                        static_cast<int>(P096_CommandTrigger::MAX),
-                        commandTriggers,
-                        commandTriggerOptions,
-                        P096_CONFIG_FLAG_GET_CMD_TRIGGER);
+        constexpr size_t optionCount = NR_ELEMENTS(commandTriggerOptions);
+        const FormSelectorOptions selector(optionCount, commandTriggers, commandTriggerOptions);
+        selector.addFormSelector(F("Write Command trigger"), F("_commandtrigger"),
+                                 P096_CONFIG_FLAG_GET_CMD_TRIGGER);
         addFormNote(F("Select the command that is used to handle commands for this display."));
       }
 
-      AdaGFXFormTextColRowMode(F("p096_colrow"), bitRead(P096_CONFIG_FLAGS, P096_CONFIG_FLAG_USE_COL_ROW) == 1);
+      AdaGFXFormTextColRowMode(F("_colrow"), bitRead(P096_CONFIG_FLAGS, P096_CONFIG_FLAG_USE_COL_ROW) == 1);
 
-      AdaGFXFormOnePixelCompatibilityOption(F("p096_compat"), !bitRead(P096_CONFIG_FLAGS, P096_CONFIG_FLAG_COMPAT_P096)); // Inverse
+      AdaGFXFormOnePixelCompatibilityOption(F("_compat"), !bitRead(P096_CONFIG_FLAGS, P096_CONFIG_FLAG_COMPAT_P096)); // Inverse
 
-      AdaGFXFormTextBackgroundFill(F("p096_backfill"), bitRead(P096_CONFIG_FLAGS, P096_CONFIG_FLAG_BACK_FILL) == 0);      // Inverse
+      AdaGFXFormTextBackgroundFill(F("_backfill"), bitRead(P096_CONFIG_FLAGS, P096_CONFIG_FLAG_BACK_FILL) == 0);      // Inverse
 
       addFormSubHeader(F("Content"));
 
@@ -401,29 +401,22 @@ boolean Plugin_096(uint8_t function, struct EventStruct *event, String& string)
         P096_CONFIG_COLORS = static_cast<uint16_t>(AdaGFXMonoRedGreyscaleColors::ADAGFXEPD_WHITE) |
                              (static_cast<uint16_t>(AdaGFXMonoRedGreyscaleColors::ADAGFXEPD_BLACK) << 16);
       }
-      AdaGFXFormForeAndBackColors(F("p096_foregroundcolor"),
+      AdaGFXFormForeAndBackColors(F("_foregroundcolor"),
                                   P096_CONFIG_GET_COLOR_FOREGROUND,
-                                  F("p096_backgroundcolor"),
+                                  F("_backgroundcolor"),
                                   P096_CONFIG_GET_COLOR_BACKGROUND,
                                   static_cast<AdaGFXColorDepth>(P096_CONFIG_FLAG_GET_COLORDEPTH));
 
       String strings[P096_Nlines];
       LoadCustomTaskSettings(event->TaskIndex, strings, P096_Nlines, 0);
 
-      String   line; // Default reserved length is plenty
-      uint16_t remain = DAT_TASKS_CUSTOM_SIZE;
+      uint16_t remain = DAT_TASKS_CUSTOM_SIZE + DAT_TASKS_CUSTOM_EXTENSION_SIZE;
 
       for (uint8_t varNr = 0; varNr < P096_Nlines; varNr++) {
-        line  = F("Line ");
-        line += (varNr + 1);
-        addFormTextBox(line, getPluginCustomArgName(varNr), strings[varNr], P096_Nchars);
+        addFormTextBox(concat(F("Line "), (varNr + 1)), getPluginCustomArgName(varNr), strings[varNr], P096_Nchars);
         remain -= (strings[varNr].length() + 1);
       }
-      String remainStr;
-      remainStr.reserve(15);
-      remainStr  = F("Remaining: ");
-      remainStr += remain;
-      addUnit(remainStr);
+      addUnit(concat(F("Remaining: "),  remain));
 
       # endif // if P096_USE_EXTENDED_SETTINGS
 
@@ -440,48 +433,50 @@ boolean Plugin_096(uint8_t function, struct EventStruct *event, String& string)
       # endif // if P096_USE_EXTENDED_SETTINGS
 
       // PIN(0)..(2) are already set
-      PIN(3)               = getFormItemInt(F("p096_epd_busy"));
-      P096_CONFIG_ROTATION = getFormItemInt(F("p096_rotate"));
+      PIN(3)               = getFormItemInt(F("_epd_busy"));
+      P096_CONFIG_ROTATION = getFormItemInt(F("_rotate"));
       # if !P096_USE_EXTENDED_SETTINGS
-      P096_CONFIG_WIDTH  = getFormItemInt(F("p096_width"));
-      P096_CONFIG_HEIGHT = getFormItemInt(F("p096_height"));
+      P096_CONFIG_WIDTH  = getFormItemInt(F("_width"));
+      P096_CONFIG_HEIGHT = getFormItemInt(F("_height"));
       # endif // if !P096_USE_EXTENDED_SETTINGS
+      # if ADAGFX_FONTS_INCLUDED
+      P096_CONFIG_DEFAULT_FONT = getFormItemInt(F("deffont"));
+      # endif // if ADAGFX_FONTS_INCLUDED
 
       # if P096_USE_EXTENDED_SETTINGS
 
       uint32_t lSettings = 0;
 
-      bitWrite(lSettings, P096_CONFIG_FLAG_USE_COL_ROW, isFormItemChecked(F("p096_colrow")));         // Bit 3 Col/Row addressing
-      bitWrite(lSettings, P096_CONFIG_FLAG_COMPAT_P096, !isFormItemChecked(F("p096_compat")));        // Bit 4 Compat_P096 (inv)
-      bitWrite(lSettings, P096_CONFIG_FLAG_BACK_FILL,   !isFormItemChecked(F("p096_backfill")));      // Bit 5 Back fill text (inv)
+      bitWrite(lSettings, P096_CONFIG_FLAG_USE_COL_ROW, isFormItemChecked(F("_colrow")));         // Bit 3 Col/Row addressing
+      bitWrite(lSettings, P096_CONFIG_FLAG_COMPAT_P096, !isFormItemChecked(F("_compat")));        // Bit 4 Compat_P096 (inv)
+      bitWrite(lSettings, P096_CONFIG_FLAG_BACK_FILL,   !isFormItemChecked(F("_backfill")));      // Bit 5 Back fill text (inv)
 
-      set4BitToUL(lSettings, P096_CONFIG_FLAG_CMD_TRIGGER, getFormItemInt(F("p096_commandtrigger"))); // Bit 8..11 Command trigger
-      set4BitToUL(lSettings, P096_CONFIG_FLAG_FONTSCALE,   getFormItemInt(F("p096_fontscale")));      // Bit 12..15 Font scale
-      set4BitToUL(lSettings, P096_CONFIG_FLAG_MODE,        getFormItemInt(F("p096_mode")));           // Bit 16..19 Text print mode
-      set4BitToUL(lSettings, P096_CONFIG_FLAG_COLORDEPTH,  getFormItemInt(F("p096_colorDepth")));     // Bit 20..23 Color depth
-      set4BitToUL(lSettings, P096_CONFIG_FLAG_DISPLAYTYPE, getFormItemInt(F("p096_type")));           // Bit 24..27 Hardwaretype
+      set4BitToUL(lSettings, P096_CONFIG_FLAG_CMD_TRIGGER, getFormItemInt(F("_commandtrigger"))); // Bit 8..11 Command trigger
+      set4BitToUL(lSettings, P096_CONFIG_FLAG_FONTSCALE,   getFormItemInt(F("_fontscale")));      // Bit 12..15 Font scale
+      set4BitToUL(lSettings, P096_CONFIG_FLAG_MODE,        getFormItemInt(F("_mode")));           // Bit 16..19 Text print mode
+      set4BitToUL(lSettings, P096_CONFIG_FLAG_COLORDEPTH,  getFormItemInt(F("_colorDepth")));     // Bit 20..23 Color depth
+      set4BitToUL(lSettings, P096_CONFIG_FLAG_DISPLAYTYPE, getFormItemInt(F("_type")));           // Bit 24..27 Hardwaretype
 
       P096_CONFIG_FLAGS = lSettings;
 
-      String   color   = webArg(F("p096_foregroundcolor"));
+      String   color   = webArg(F("_foregroundcolor"));
       uint16_t fgcolor = static_cast<uint16_t>(AdaGFXMonoRedGreyscaleColors::ADAGFXEPD_BLACK);             // Default to white when empty
 
       if (!color.isEmpty()) {
         fgcolor = AdaGFXparseColor(color, static_cast<AdaGFXColorDepth>(P096_CONFIG_FLAG_GET_COLORDEPTH)); // Reduce to rgb565
       }
-      color = webArg(F("p096_backgroundcolor"));
+      color = webArg(F("_backgroundcolor"));
       uint16_t bgcolor = AdaGFXparseColor(color, static_cast<AdaGFXColorDepth>(P096_CONFIG_FLAG_GET_COLORDEPTH));
 
       P096_CONFIG_COLORS = fgcolor | (bgcolor << 16); // Store as a single setting
 
       String strings[P096_Nlines];
-      String error;
 
       for (uint8_t varNr = 0; varNr < P096_Nlines; varNr++) {
         strings[varNr] = webArg(getPluginCustomArgName(varNr));
       }
 
-      error = SaveCustomTaskSettings(event->TaskIndex, strings, P096_Nlines, 0);
+      const String error = SaveCustomTaskSettings(event->TaskIndex, strings, P096_Nlines, 0);
 
       if (error.length() > 0) {
         addHtmlError(error);
@@ -513,7 +508,7 @@ boolean Plugin_096(uint8_t function, struct EventStruct *event, String& string)
 
     case PLUGIN_INIT:
     {
-      if (Settings.InitSPI != 0) {
+      if (Settings.isSPI_validForTask(event->TaskIndex)) {
         initPluginTaskData(event->TaskIndex,
                            # if P096_USE_EXTENDED_SETTINGS
                            new (std::nothrow) P096_data_struct(static_cast<EPD_type_e>(P096_CONFIG_FLAG_GET_DISPLAYTYPE),
@@ -545,7 +540,6 @@ boolean Plugin_096(uint8_t function, struct EventStruct *event, String& string)
         addLog(LOG_LEVEL_ERROR, F("EPD  : SPI not enabled, init cancelled."));
       }
 
-      success = true;
       break;
     }
 
@@ -578,7 +572,6 @@ boolean Plugin_096(uint8_t function, struct EventStruct *event, String& string)
       }
       break;
     }
-
   }
 
   return success;
@@ -586,26 +579,26 @@ boolean Plugin_096(uint8_t function, struct EventStruct *event, String& string)
 
 # ifndef P096_USE_ADA_GRAPHICS
 
-// Print some text
-// param [in] string : The text to display
-// param [in] X : The left position (X)
-// param [in] Y : The top position (Y)
-// param [in] textSize : The text size (default 1)
-// param [in] color : The fore color (default ILI9341_WHITE)
-// param [in] bkcolor : The background color (default ILI9341_BLACK)
-void Plugin_096_printText(const char *string, int X, int Y, unsigned int textSize, unsigned short color, unsigned short bkcolor)
-{
-  eInkScreen->clearBuffer();
-  eInkScreen->clearDisplay();
-  eInkScreen->setCursor(X, Y);
-  eInkScreen->setTextColor(color, bkcolor);
-  eInkScreen->setTextSize(textSize);
-  String fixString = string;
+// // Print some text
+// // param [in] string : The text to display
+// // param [in] X : The left position (X)
+// // param [in] Y : The top position (Y)
+// // param [in] textSize : The text size (default 1)
+// // param [in] color : The fore color (default ILI9341_WHITE)
+// // param [in] bkcolor : The background color (default ILI9341_BLACK)
+// void Plugin_096_printText(const char *string, int X, int Y, unsigned int textSize, unsigned short color, unsigned short bkcolor)
+// {
+//   eInkScreen->clearBuffer();
+//   eInkScreen->clearDisplay();
+//   eInkScreen->setCursor(X, Y);
+//   eInkScreen->setTextColor(color, bkcolor);
+//   eInkScreen->setTextSize(textSize);
+//   String fixString = string;
 
-  Plugin_096_FixText(fixString);
-  eInkScreen->println(fixString);
-  eInkScreen->display();
-}
+//   Plugin_096_FixText(fixString);
+//   eInkScreen->println(fixString);
+//   eInkScreen->display();
+// }
 
 # endif // ifndef P096_USE_ADA_GRAPHICS
 
@@ -620,27 +613,27 @@ unsigned short Plugin_096_ParseColor(const String& colorString)
 
   s.toLowerCase();
 
-  if (s.equals(F("black"))) {
+  if (equals(s, F("black"))) {
     return EPD_BLACK;
   }
 
-  if (s.equals(F("white"))) {
+  if (equals(s, F("white"))) {
     return EPD_WHITE;
   }
 
-  if (s.equals(F("inverse"))) {
+  if (equals(s, F("inverse"))) {
     return EPD_INVERSE;
   }
 
-  if (s.equals(F("red"))) {
+  if (equals(s, F("red"))) {
     return EPD_RED;
   }
 
-  if (s.equals(F("dark"))) {
+  if (equals(s, F("dark"))) {
     return EPD_DARK;
   }
 
-  if (s.equals(F("light"))) {
+  if (equals(s, F("light"))) {
     return EPD_LIGHT;
   }
   return EPD_WHITE;

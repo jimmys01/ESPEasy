@@ -1,30 +1,36 @@
 #include "../Helpers/Numerical.h"
 
+#include "../DataStructs/TimingStats.h"
+
 #include "../Globals/Settings.h"
+#include "../Helpers/StringConverter.h"
 
 /********************************************************************************************\
    Check if string is valid float
  \*********************************************************************************************/
 bool isValidFloat(float f) {
-  if (isnan(f)) { return false; // ("isnan");
-  }
-
-  if (isinf(f)) { return false; // ("isinf");
-  }
-  return true;
+#ifdef ESP32
+  return !isnanf(f) && !isinff(f);
+#else
+  return !isnan(f) && !isinf(f);
+#endif
 }
 
-bool validIntFromString(const String& tBuf, int& result) {
+bool isValidDouble(ESPEASY_RULES_FLOAT_TYPE f) {
+  return !isnan(f) && !isinf(f);
+}
+
+bool validIntFromString(const String& tBuf, int32_t& result) {
   NumericalType detectedType;
   const String  numerical = getNumerical(tBuf, NumericalType::Integer, detectedType);
 
   if ((detectedType == NumericalType::BinaryUint) ||
       (detectedType == NumericalType::HexadecimalUInt)) {
-    unsigned int tmp;
+    uint32_t tmp;
     bool isvalid = validUIntFromString(numerical, tmp);
 
     // FIXME TD-er: What to do here if the uint value > max_int ?
-    result = static_cast<int>(tmp);
+    result = static_cast<int32_t>(tmp);
     return isvalid;
   }
   const bool isvalid = numerical.length() > 0;
@@ -55,7 +61,7 @@ bool validInt64FromString(const String& tBuf, int64_t& result) {
   return isvalid;
 }
 
-bool validUIntFromString(const String& tBuf, unsigned int& result) {
+bool validUIntFromString(const String& tBuf, uint32_t& result) {
   NumericalType detectedType;
   String numerical   = getNumerical(tBuf, NumericalType::HexadecimalUInt, detectedType);
   const bool isvalid = numerical.length() > 0;
@@ -96,17 +102,24 @@ bool validUInt64FromString(const String& tBuf, uint64_t& result) {
 }
 
 bool validFloatFromString(const String& tBuf, float& result) {
+  int nrDecimals{};
+  return validFloatFromString(tBuf, result, nrDecimals);
+}
+
+bool validFloatFromString(const String& tBuf, float& result, int& nrDecimals) {
   // DO not call validDoubleFromString and then cast to float.
   // Working with double values is quite CPU intensive as it must be done in software
   // since the ESP does not have large enough registers for handling double values in hardware.
+  nrDecimals = -1;
   NumericalType detectedType;
   const String  numerical = getNumerical(tBuf, NumericalType::FloatingPoint, detectedType);
 
   if ((detectedType == NumericalType::BinaryUint) ||
       (detectedType == NumericalType::HexadecimalUInt)) {
-    unsigned int tmp;
+    uint32_t tmp;
     bool isvalid = validUIntFromString(tBuf, tmp);
     result = static_cast<float>(tmp);
+    nrDecimals = 0;
     return isvalid;
   }
 
@@ -114,11 +127,24 @@ bool validFloatFromString(const String& tBuf, float& result) {
 
   if (isvalid) {
     result = numerical.toFloat();
+    const int index_dot = numerical.indexOf('.');
+    if (index_dot >= 0) {
+      nrDecimals = numerical.length() - index_dot - 1;
+      if (nrDecimals < 0) {
+        nrDecimals = 0;
+      }
+    }
   }
   return isvalid;
 }
 
-bool validDoubleFromString(const String& tBuf, double& result) {
+bool validDoubleFromString(const String& tBuf, ESPEASY_RULES_FLOAT_TYPE& result) {
+  int nrDecimals{};
+  return validDoubleFromString(tBuf, result, nrDecimals);
+}
+
+bool validDoubleFromString(const String& tBuf, ESPEASY_RULES_FLOAT_TYPE& result, int& nrDecimals) {
+  nrDecimals = -1;
   #if defined(CORE_POST_2_5_0) || defined(ESP32)
 
   // String.toDouble() is introduced in core 2.5.0
@@ -129,7 +155,8 @@ bool validDoubleFromString(const String& tBuf, double& result) {
       (detectedType == NumericalType::HexadecimalUInt)) {
     uint64_t tmp;
     bool     isvalid = validUInt64FromString(tBuf, tmp);
-    result = static_cast<double>(tmp);
+    result = static_cast<ESPEASY_RULES_FLOAT_TYPE>(tmp);
+    nrDecimals = 0;
     return isvalid;
   }
 
@@ -137,17 +164,28 @@ bool validDoubleFromString(const String& tBuf, double& result) {
 
   if (isvalid) {
     result = numerical.toDouble();
+    const int index_dot = numerical.indexOf('.');
+    if (index_dot >= 0) {
+      nrDecimals = numerical.length() - index_dot - 1;
+      if (nrDecimals < 0) {
+        nrDecimals = 0;
+      }
+    }
   }
   return isvalid;
   #else // if defined(CORE_POST_2_5_0) || defined(ESP32)
   float tmp = static_cast<float>(result);
-  bool  res = validFloatFromString(tBuf, tmp);
-  result = static_cast<double>(tmp);
+  bool  res = validFloatFromString(tBuf, tmp, nrDecimals);
+  result = static_cast<ESPEASY_RULES_FLOAT_TYPE>(tmp);
+
   return res;
   #endif // if defined(CORE_POST_2_5_0) || defined(ESP32)
 }
 
 bool mustConsiderAsString(NumericalType detectedType) {
+  return detectedType != NumericalType::FloatingPoint &&
+         detectedType != NumericalType::Integer;
+/*
   switch (detectedType) {
     case NumericalType::FloatingPoint:
     case NumericalType::Integer:
@@ -158,6 +196,7 @@ bool mustConsiderAsString(NumericalType detectedType) {
       return true;
   }
   return false;
+*/
 }
 
 bool mustConsiderAsJSONString(const String& value) {
@@ -165,12 +204,22 @@ bool mustConsiderAsJSONString(const String& value) {
     // Empty string
     return true;
   }
+  const char c = value[0];
 
-  NumericalType detectedType;
-  const bool    isNum  = isNumerical(value, detectedType);
-  const bool    isBool = (Settings.JSONBoolWithoutQuotes() && ((value.equalsIgnoreCase(F("true")) || value.equalsIgnoreCase(F("false")))));
+  if (isDigit(c) || c == '-' || c == '.' || c == '+' || c == ' ') {
+    NumericalType detectedType;
+    if (isNumerical(value, detectedType)) {
+      return mustConsiderAsString(detectedType);
+    }
+  }
+  if (equals(value, F("true")) ||
+      equals(value, F("false")) ||
+      equals(value, F("null"))) 
+  {
+    return !Settings.JSONBoolWithoutQuotes();
+  }
 
-  return !isBool && (!isNum || value.isEmpty() || mustConsiderAsString(detectedType));
+  return true;
 }
 
 String getNumerical(const String& tBuf, NumericalType requestedType, NumericalType& detectedType) {
@@ -207,7 +256,9 @@ String getNumerical(const String& tBuf, NumericalType requestedType, NumericalTy
   }
 
   // Strip leading zeroes
-  while (c == '0' && isdigit(tBuf.charAt(firstDec + 1))) {
+  while (c == '0' && 
+         (firstDec + 1) < bufLength && 
+         isdigit(tBuf.charAt(firstDec + 1))) {
     ++firstDec;
     c = tBuf.charAt(firstDec);
   }
@@ -242,7 +293,7 @@ String getNumerical(const String& tBuf, NumericalType requestedType, NumericalTy
         decPt        = true;
         detectedType = NumericalType::FloatingPoint;
       } else {
-        if (result.equals(F("-"))) {
+        if (equals(result, '-')) {
           detectedType = NumericalType::Not_a_number;
           return emptyString;
         }
@@ -306,7 +357,7 @@ String getNumerical(const String& tBuf, NumericalType requestedType, NumericalTy
     }
   }
 
-  if (result.equals(F("-"))) {
+  if (equals(result, '-')) {
     detectedType = NumericalType::Not_a_number;
     return emptyString;
   }
@@ -314,6 +365,7 @@ String getNumerical(const String& tBuf, NumericalType requestedType, NumericalTy
 }
 
 bool isNumerical(const String& tBuf, NumericalType& detectedType) {
+  START_TIMER;
   NumericalType requestedType = NumericalType::FloatingPoint;
   const String  result        = getNumerical(tBuf, requestedType, detectedType);
 
@@ -327,9 +379,9 @@ bool isNumerical(const String& tBuf, NumericalType& detectedType) {
     // Resulting size should be the same size as the given string.
     // Not sure if it is possible to have a longer result, but better be sure to also allow for larger resulting strings.
     // For example ".123" -> "0.123"
+    STOP_TIMER(IS_NUMERICAL);
     return result.length() >= tmp.length();
   }
-
 
   return result.length() > 0;
 }

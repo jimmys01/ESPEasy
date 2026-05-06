@@ -1,5 +1,19 @@
+#####
 Tools
-*****
+#####
+
+Command
+*******
+
+In the **Command** input field you can enter a command to be executed by the unit.
+
+Once the command is executed, by clicking the Submit button or pressing the <Enter> key, the output of the command (*not* the logging) is shown below the command input. Most commands, when successful, will be output as ``OK``, or if an error occurs ``Command unknown:...`` or ``ERROR``. Some commands, like the ``gpio`` related, output a new state overview for the involved pin.
+
+As a sort-of side-effect after clicking Submit, the command is url-encoded by the browser, and can be copied from the address bar of the browser to be used from a remote system (or other ESP from rules).
+
+System
+******
+
 
 Log
 ===
@@ -93,7 +107,7 @@ The ``sysinfo`` page does show a lot of information about the system.
 
 * **Unit Number**: The assigned unit number of the node.
 * **Local Time**:	The local time as known by the node. This includes any set timezone and DST (Daylight Saving).
-* **Time Source**:	The origin of the current system time. (e.g. NTP / GPS / Manual set)
+* **Time Source**:	The origin of the current system time. (e.g. NTP / GPS / Manual set / Node on the P2P network)
 * **UTC time stored in RTC**: When external RTC is configured and has a time set, the UTC time stored in this RTC will be shown. (Added: 2022/10/30)
 * **Time Wander**:	Time drift of the crystal in ppm. Espressif states the crystal should have an accuracy of better than 10 ppm, which translates in a wander of 0.010 msec/sec.  (older ESPEasy builds used msec/sec as unit, but ppm is more relatable to crystal specs.)
 * **Uptime**:	Current uptime of the node
@@ -144,7 +158,7 @@ All these values are described in great detail in the Advanced section, where th
 
 * **Force WiFi B/G**:	Shows whether the ESPEasy node is forced into 802.11b/g mode.
 * **Restart WiFi Lost Conn**:	Shows whether the ESPEasy node is configured to restart the WiFi radio when connection is lost. When reporting false (the default), the WiFi radio is not restarted, but it just retries to connect to WiFi.
-* **Force WiFi No Sleep**:	``true`` indicates the WiFi radio is not allowed to enter low power mode to conserve energy.
+* **Force WiFi No Sleep**:	``true`` indicates the WiFi radio is not allowed to enter low power mode to conserve energy. The ESP may need to reconnect or sometimes even reboot to activate a change of this setting. It may sometimes not be able to reconnect on its own when changed, so be careful when changing this.
 * **Periodical send Gratuitous ARP**:	``true`` indicates the ESPEasy node will send Gratuitous ARP packets to improve reachability from the network to the node.
 * **Connection Failure Threshold**:	Counter indicating the number of failed connection attempts needed to perform a reboot.
 * **Max WiFi TX Power**:	The set maximum TX power in dBm.
@@ -153,18 +167,25 @@ All these values are described in great detail in the Advanced section, where th
 * **Send With Max TX Power**:	``true`` indicates the WiFi TX power will not be changed and thus is sending at maximum TX power for the active WiFi mode (802.11 b/g/n)
 * **Extra WiFi scan loops**:	The set number of extra scans of all channels when a WiFi scan is needed.
 * **Use Last Connected AP from RTC**:	``false`` means the ESPEasy node needs to scan at reboot and cannot reuse the last used connection before the reboot.
+* **Extra Wait WiFi Connect**: ``true`` means there is an extra wait upto 1000 msec after initiating a connection to an access point. This can be useful when connecting to some FritzBox access points or routers. (Added: 2023/04/05)
+* **Enable SDK WiFi Auto Reconnect**: ``true`` means the Espressif SDK will automatically attempt a reconnect when a connection is briefly lost. Access points (like TP-Link Omada) with "Band Steering" enabled may trigger a quick disconnect to force nodes to connect on the 5 GHz band. (Added: 2023/04/05)
+* **Hidden SSID Slow Connect**: ``true`` Connect per found hidden SSID to an access point. Needed for some APs like Mikrotik. This may slow down connecting to the AP significantly. (Added: 2023/11/20)
+
+
+
+.. note:: On ESP32, WiFi TX power settings are disabled as these may cause undesired behavior and also use more power compared to using the ECO mode.
 
 Firmware
 --------
 
-* **Build**:  Showing the internal build number. Example: ``20114 - Mega``
+* **Build**:  Showing the internal build number. Example: ``20241222 - Mega``
 * **System Libraries**:  Showing the used core library version. Example: ``ESP82xx Core 2843a5ac, NONOS SDK 2.2.2-dev(38a443e), LWIP: 2.1.2 PUYA support``
 * **Git Build**: Showing the GIT branch or tag information with SHA of the last commit. 	Example: ``feature/randomize_NTP_interval_569442e``
 * **Plugin Count**: 	Number of plugins included in the build. 
 * **Build Origin**:	Indication whether it is "self built" or an official build.
-* **Build Time**:  Date and time when the running version of ESPEasy was built. Example: ``Aug 11 2021 14:00:44``
-* **Binary Filename**: The filename of the installed ESPEasy build.  Example: ``ESP_Easy_mega_20210811_custom_ESP8266_4M1M``
-* **Build Platform**:	The platform used to build the installed ESPEasy build. Example: ``Windows-10-10.0.19041-SP0``
+* **Build Time**:  Date and time when the running version of ESPEasy was built. Example: ``Dec 22 2024 22:00:44``
+* **Binary Filename**: The filename of the installed ESPEasy build.  Example: ``ESP_Easy_mega_20241222_custom_ESP8266_4M1M``
+* **Build Platform**:	The platform used to build the installed ESPEasy build. Example: ``Windows-10-10.0.22631-SP0``
 * **Git HEAD**: The Git branch + SHA of the last commit used to build the installed ESPEasy build.	Example: ``feature/randomize_NTP_interval_569442e``
 
 System Status
@@ -226,9 +247,7 @@ Rules Settings
 --------------
 
 * Rules - Check to enable rules functionality (on next page load, extra Rules tab will appear)
-* Old Engine - Default checked.
 * Enable Rules Cache - Rules cache will keep track of where in the rules files each ``on ... do`` block is located. This significantly improves the time it takes to handle events. (Enabled by default, Added 2022/04/17)
-* Allow Rules Event Reorder - It is best to have the rules blocks for the most frequently occuring events placed at the top of the first rules file. (also for frequently happening events, which you don't want to act on) The cached event positions can be reordered in memory based on how often an event was matched.  (Enabled by default, Added 2022/04/17, disabled 2022/06/24)
 * Tolerant last parameter - When checked, the last parameter of a command will have less strict parsing.
 * SendToHTTP wait for ack - When checked, the command SendToHTTP will wait for an acknowledgement from the server.
 * SendToHTTP Follow Redirects - When checked, HTTP calls may follow redirects. Strict RFC2616, only requests using GET or HEAD methods will be redirected (using the same method), since the RFC requires end-user confirmation in other cases.
@@ -254,6 +273,15 @@ This allows ESPEasy to know the correct date and time after been powered off for
 
 N.B. these modules all use I2C, so they need to be connected to the configured I2C pins and those pins should be set.
 
+Added: 2025-02-02
+
+When multiple I2C Buses are configured (ESP32 only), we need to configure on which I2C Bus the RTC chip is connected:
+
+.. image:: images/Tools_RTC_I2CSelector.png
+
+NB: If only 1 I2C Bus is configured, this configuration option isn't shown.
+
+
 Procedure to configure a real time clock (RTC) chip:
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -270,6 +298,9 @@ Besides using NTP to set the date/time to the RTC chip, other supported options 
 
 * Using the ``DateTime`` command to set the date and time.
 * Having a GPS receiver connected, using the GPS plugin (:ref:`P082_page`), the ESPEasy date/time will be set when GPS date/time is valid, as that is more accurate than the RTC date/time. The RTC date/time will be used from boot, and be updated once the GPS has a fix, which may take some time, depending on conditions.
+* Use the Date/Time from another node on the P2P network, that has a time source configured.
+
+ESPEasy will automatically select the time source with the highest expected accuracy.
 
 
 DST Settings
@@ -304,17 +335,48 @@ See `Log section <Tools.html#log>`_ for more detailed information.
 * SD Log Level - Log Level for sending logs to a SD card (only when included in the build)
 
 
-Serial Settings
----------------
+Serial Console Settings
+-----------------------
 
-These settings only apply to using the serial port in core ESPEasy functionality,
-like sending out logs or receiving commands via the serial port.
+ESPEasy has a command line style console.
+This console will show the logs (when Serial Log Level is not set to "None") and accept commands.
 
-* Enable Serial Port - When unchecked, logs will not be sent to the serial port and commands will not be read from it.
+This console can be accessed via a serial port.
+
+* Enable Serial Port Console - When unchecked, logs will not be sent to the serial port and commands will not be read from it.
 * Baud Rate - Baud rate of the serial port. (default: 115200)
 
-Make sure to disable the serial port here when a sensor is connected to Serial0 
-or the GPIO pins are used for something other then a serial port.
+(Serial port selection added: 2023-06-01)
+
+* Serial Port - The selected serial port to use for the console.
+* ESP RX GPIO ← TX - GPIO pin used as RX, to connect with the TX of the other device.
+* ESP TX GPIO → RX - GPIO pin used as TX, to connect with the RX of the other device.
+* Fallback to Serial 0 - (Only on ESP32-C3/S2/S3/C6) Configure HW Serial0 port as secondary port for the ESPEasy console. When unchecked, the Fallback RX/TX pins will be available for selection in the GPIO pin selector and GPIO boot-states configuration on the Hardware tab.
+
+GPIO pin selection will only be shown for Serial Port types which require action GPIO pins.
+For example USB CDC and HW CDC ports do not need specific GPIO pins for their configuration.
+
+See also: `Serial Helper <../Plugin/SerialHelper.html>`__
+
+.. note:: Make sure to either uncheck "Enable Serial Port Console" or configure another serial port for the console, when either HW Serial0 or its pins are used in a task or on the hardware page for I2C, SPI, SD-card or Ethernet.
+
+Correct typing errors: (added: 2025-01-21)
+
+When typing commands in the console (nothing you type is visible until you press <Enter>), typos can be corrected using the backspace key (ctrl-H). Some terminal configurations may use a different key code for backspace, then this can be re-configured in your terminal software, or you can use ``<ctrl-H>`` for correcting typos.
+
+Special notes on Software Serial
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When configuring "Software Serial" as a serial port for the console, please be aware that there might be some bit errors during transmission.
+Higher baudrate will only make this problem worse and may even causes issues where entered commands are not received by ESPEasy.
+The default baud rate of 115200 is for sure too high for software serial, regardless the platform (ESP8266/ESP32-xx).
+
+The best baud rate for the ESPEasy Console when using Software Serial may differ per module.
+
+For example on an ESP32-S3, software serial is remarkably usable at 28800 baud.
+But the ESP32-C3 does seem to perform horrible, regardless the baud rate.
+
+Do not use multiple instances of a Software Serial port as both will greatly affect each other in a bad way when used at the same time.
 
 
 Inter-ESPEasy Network
@@ -344,17 +406,20 @@ like subnet mask / gateway / DNS, it may still be useful.
 This allows a somewhat static IP in your network (N.B. use it with an 'octet' outside the range of the DHCP IPs) while still having set to DHCP.
 So if you take the node to another network which does use 192.168.52.x then you will know it will be on 192.168.52.10 (when setting this value to "10")
 
-I2C ClockStretchLimit
-^^^^^^^^^^^^^^^^^^^^^
-
-- `I2C-bus.org - Clock Stretching <https://www.i2c-bus.org/clock-stretching/>`_
-- `ESPeasy wiki - Basics: The I2C Bus <https://www.letscontrolit.com/wiki/index.php/Basics:_The_I%C2%B2C_Bus>`_
-
 WD I2C Address
 ^^^^^^^^^^^^^^
 
 The Watchdog timer can be accessed via I2C.
 What can be read/set/changed must still be documented.
+
+Added: 2025-02-02
+
+When multiple I2C Buses are configured (ESP32 only), we need to configure on which I2C Bus the Watchdog chip is connected:
+
+.. image:: images/Tools_WD_I2CSelector.png
+
+NB: If only 1 I2C Bus is configured, this configuration option isn't shown.
+
 
 JSON bool output without quotes
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -379,6 +444,8 @@ Try clear I2C bus when stuck
 
 Added: 2021-09-26
 
+Not available on ESP32 IDF 5.x builds (since Sept 2024 all ESP32-family builds use IDF 5.x framework).
+
 Occasionally the I2C bus can become "stuck".
 This is quite hard to reproduce, as it is very likely this is caused by external noise.
 Another possible cause can be that the ESP rebooted in the middle of an I2C transaction.
@@ -394,6 +461,36 @@ This will swap the SDA/SCL pins and tries to perform a scan and then restores th
 If this is the fix, where ESPEasy is not able to resolve the lockec I2C bus on itself, please open an issue for this on GitHub.
 
 Default: unchecked
+
+Check I2C devices when enabled
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Added: 2023-02-07
+
+To ensure that I2C connected devices work as intended, a device-available-check can be performed when the task is initialized, and when the taskdata is read every Interval seconds. If the device doesn't respond during task init, or after 10 consecutive failed reads, the task will be disabled.
+
+Default: checked
+
+NB: This option is excluded from the build if this setting is not available.
+
+Show Unit of Measure
+^^^^^^^^^^^^^^^^^^^^
+
+Added: 2025-06-12
+
+If the Unit of Measure, configurable per Task Value, should not be displayed on the Devices page, this setting can be unchecked. The UoM field will still be present in the JSON output at ``/json`` output for the taskvalues where it is set, and the ``ShowUoM`` boolean value at the root of the JSON structure will reflect the state of this checkbox.
+
+NB: This option is excluded from the build if this feature is not enabled.
+
+MQTT Connect in background
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Added: 2025-08-23
+
+Depending on the internet connection, f.e. when connecting via a low-end mobile network or other slow connection type, starting a connection to a MQTT Broker can take quite some time.
+
+On ESP32, tasks like starting the MQTT connection can be delegated to an independent background task, to avoid blocking the normal working of ESPEasy, that will report the result when completed. This feature is enabled by default, as it is the preferred setting, but when this way of connecting is causing issues, it can be disabled.
+
 
 Allow OTA without size-check
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -416,6 +513,26 @@ Added: 2022-09-05
 When using Dark-mode as an Operating System or Web-browser setting, the ESPEasy Web interface defaults to using a Dark theme as well. For those that prefer to use non-dark mode, or use ESPEasy in dark mode while the OS/browser is not configured that way, this can be selected here.
 
 NB: If this option is not available, the regular non-dark mode will be used.
+
+Disable Rules auto-completion
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Added: 2023-07-20
+
+When Rules auto-completion, also including syntax highlighting, is available in the build, some users have difficulty working with the auto-completion. This option disables the auto-completion, and that also inhibits the syntax highlighting as these 2 features are closely integrated.
+
+Disable Save Config as .tar
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Added: 2023-08-25
+
+Only available in builds that have .tar support included!
+
+By default, using the Tools/Save button, the complete configuration will be downloaded as a single .tar archive, that includes all configuration files (``config.dat``, ``security.dat``, ``provisioning.dat``, ``notification.dat``, ``rules1.txt`` .. ``rules4.txt`` and any task-specific CustomSettings ``extcfg<NN>.dat``).
+
+Enabling this option allows to download *only* the ``config.dat`` file (renamed to include unit name, unit number, buildnumber and current date/time), to accommodate external systems/scripts that expect only the .dat file.
+
+The Tools/Backup files feature will still download all files stored on the Flash file system, independent of this setting, and also the Tools/Load and Tools/File browser/Upload buttons will extract the included files from an uploaded .tar file.
 
 Deep Sleep Alternative
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -677,9 +794,55 @@ This is no new functionality, as it was present before and also enabled by defau
 New default value since 2021-06-20: unchecked
 
 
+Extra Wait WiFi Connect
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Added: 2023-04-05
+
+Some FritzBox routers may be difficult to connect with using Espressif modules.
+It is unclear what exactly causes these issues.
+However experiments have shown that an added delay of upto 1000 msec right after calling ``WiFi.begin()`` does improve the success rate of connecting to such access points.
+
+
+Enable SDK WiFi Auto Reconnect
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Added: 2023-04-05
+
+Some dual band access points (2.4 GHz and 5 GHz) try to balance connected nodes over these bands, based on their signal strength.
+This is called "Band Steering".
+
+WiFi clients supporting 802.11k and/or 802.11v can be redirected to another band and/or other meshed access point.
+Older WiFi clients, not supporting these protocols, will briefly be disconnected to force them to reconnect. Hopefully to another access point or frequency band.
+
+The problem is that such disconnects cause issues with Espressif modules, messing up the internal state of the WiFi.
+
+ESPEasy does act on WiFi events. But these events are not always dealt with in due time, messing up the connected state even more.
+In such cases, where "Band Steering" cannot be disabled, one can enable the Espressif SDK WiFi Auto Reconnect option.
+This will act much faster on these disconnect events. However it also seems to suppress some WiFi events.
+
+Whenever ESPEasy calls for a disconnect, or the disconnect takes longer than such a very brief disconnect initiated by the Band Steering algorithm of the access point, ESPEasy will turn off the WiFi and turn it on again as if "Restart WiFi Lost Conn" was enabled.
+
+
+Hidden SSID Slow Connect
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Added: 2023-11-20
+
+Some access points with hidden SSID do not react to a broadcast connect attempt with a given SSID.
+For example Mikrotik routers and access points only allow connecting to a hidden SSID when specifically addressed.
+This may cause a significant slow down connecting to a hidden AP when there are lots of hidden access points with a relative strong signal.
+
+This is enabled by default.
+
 
 Show JSON
 =========
+
+This will show the (nearly) complete node configuration and sensor data in json format. When opened from a browser, you may need to select a formatting/display option before anything is shown.
+
+The data in the json is gathered at the time the request is made, so will contain the latest sensor data, that can be shown in a (custom) dashboard, or pulled and stored by an external monitoring service.
+
 
 Show Metrics
 ============
@@ -699,6 +862,7 @@ System metrics exposed are:
 * Wifi Strength
 * Wifi connection time
 * Wifi reconnection count (since boot)
+* CPU temperature (when available in the build) (Added: 2025/07/22)
 
 In Addition, device values are exposed.  
 
@@ -795,6 +959,105 @@ Then it does not make sense to have the client timeout of that controller set to
 System Variables
 ================
 
+Shows an overview of the available variables set from rules, and available ``%variable%`` variables in several categories.
+
+Included Plugins
+================
+
+Show a list of all plugins available in the build, Plugins, Controllers and Notifications.
+
+For Devices, the plugins are listed both sorted by Description and by Plugin ID, for easier retrieval.
+
+Controller plugins also show columns for MQTT and TLS (when included in the build).
+
+.. image:: images/Tools_PluginList_Controllers.png
+
+
+
+Interfaces
+**********
+
+I2C Scan
+========
+
+To verify if any connected I2C devices are properly detected by the ESP, the I2C Scan is available. This will scan the I2C bus, and, when configured, the additional buses/channels provided via an I2C multiplexer, for available devices.
+
+The scan is performed if the I2C ``SDA`` and ``SCL`` GPIO pins are configured on the Hardware page, and will use the configured ``Slow device Clock Speed`` setting (default: 100 kHz) during the scan, as that should be supported by any I2C device available.
+
+The output is a list of all addresses, in hexadecimal notation, and, when included in the build, the known device name(s) supported at that address. On the same condition, and when the plugin for the detected device is included in the build, the name of the plugin is also listed:
+
+Example scan showing a single device, with the Plugin included in the build:
+
+.. image:: images/Tools_I2Cscan_single_bus.png
+
+Example scan using an I2C multiplexer, showing multiple devices across multiple channels, with the plugins included in the (MAX) build:
+
+.. image:: images/Tools_I2Cscan_multiplexer.png
+
+Added: 2025-02-02
+
+When having multiple I2C Buses configured, for each configured interface an I2C Scan is performed, including the multiplexer if that's configured.
+
+An example: (No actual multiplexer connected...)
+
+.. image:: images/Tools_I2Cscan_multipleBuses.png
+
+|
+
+.. note:: On builds that have ``LIMIT_BUILD_SIZE`` set, like the ESP8266 Collection and Display builds, the names of the supported devices and plugins are **not** included in the output, only the address(es) are listed.
+
+|
+
+Settings
+********
+
+Load
+====
+
+The :cyan:`Load` button will allow to load files onto the Flash file system. If you want to restore a previously saved ``config.dat``, the downloaded file has to be renamed to exactly ``config.dat`` and uploaded.
+
+Since 2023-08-25, .tar archive support has been added and made available in most builds, allowing to download and upload the complete configuration, and even all files on the flash file system, as a single archive, for backup and restore/clone purposes. This makes it possible to more easily deploy a unit using a pre-configured configuration.
+
+Uploading an earlier created backup as a .tar file, will unpack all files in the root of the archive to the flash file system, *overwriting* any files that already exist. If the archive includes ``config.dat`` and the Extended CustomTaskSettings feature is available, any already existing ``extcfg<NN>.dat`` file that's not included in the archive will be removed, as that is part of the configuration, and these files can not be deleted manually.
+
+Any files in subdirectories in the archive will be ignored, as directories are not supported on the flash filesystem.
+
+Save
+====
+
+The :cyan:`Save` button offers to download the configuration of the unit. If .tar file support is included in the build, by default all configuration files (``config.dat``, ``security.dat``, ``provisioning.dat``, ``notification.dat``, ``rules1.txt`` .. ``rules4.txt`` and any task-specific CustomSettings ``extcfg<NN>.dat``) will be included, if they exist, in the .tar archive that can be downloaded. Ensure the file is actually saved by your browser, as some browsers try to discourage the download of both .dat and .tar files, and need an extra confirmation to store the file!
+
+If .tar file support is not included, or the Tools/Advanced option **Disable Save Config as .tar** is enabled, only the ``config.dat`` file will be downloaded.
+
+Backup files
+============
+
+The :cyan:`Backup files` button is only available if .tar file support is included in the build, and offers to download a .tar archive containing all files on the flash file system. These can be stored as a backup and restored in case of some configuration or system failure, or used to create 1 or multiple clones of the unit for multi-deployment. Uploading can also be started from an automation system or script, POST-ing the .tar archive from an external source.
+
+Backup w/o credentials
+======================
+
+The :cyan:`Backup w/o credentials` button acts like the :cyan:`Backup files` button, with the exception that the ``security.dat`` file is excluded from the backup, so you can share a complete system configuration, without sharing any usernames, passwords and similar secrets that should often not be shared.
+
+The backup filename includes ``no_creds`` to show this fact.
+
+Firmware
+********
+
+Firmware update
+===============
+
+Via the :cyan:`Update Firmware` button, you can browse for an updated firmware, downloaded from the Releases page, an Actions run, or self-built, and install that. When using the same flash configuration (``4M1M``, ``4M316k``, ``8M1M``, etc.) and file system type (SPIFFS v.s. LittleFS) all settings will be preserved. When uncertain, the configuration should be saved first, using either the Save (or Backup files if available) button above.
+
+.. include:: ../Reference/Migrate_SPIFFS_to_LittleFS.rst
+
+File system
+***********
+
+File browser
+============
+
+Via :cyan:`File browser` you can browse the files on the flash file system, download them separately, upload additional files, or delete any non-system files.
 
 Factory Reset
 =============
@@ -802,7 +1065,7 @@ Factory Reset
 Sometimes it can be useful to start over with a fresh setup.
 The Factory Reset allows just that, and more.
 
-- Format flash filesystem (so called SPIFFS)
+- Format flash filesystem (SPIFFS or LittleFS)
 - Re-create new settings files
 - Already store some existing values to keep
 - Allow for some pre-defined module config
@@ -846,15 +1109,15 @@ In order to download settings files, one has to select which ones to download an
 In the example shown here, the notification settings and rules were cloned from another ESPeasy node.
 This other node is protected using a login, just to show basic authentication is also allowed.
 
-Due to the needed memory resources, it is not possible to download from HTTPS.
-This also meand the settings file and credentials are sent in plain text. 
+Due to the needed memory resources, it is currently not possible to download from HTTPS.
+This also means the settings file and credentials are sent in plain text. 
 So do not use this to download settings with sensitive information directly from the internet.
 
 On some nodes the remaining free space on the SPIFFS filesystem may be too small to keep the original file and a downloaded version.
 For example on 1MB nodes, there is only 120k SPIFFS, which means it is not possible to have the ''config.dat'' file stored twice on the filesystem.
 
 For these, the "Delete First" checkbox should be used.
-But be aware that the file is deleted first, even if the host holding the files to download is unavailable.
+But be aware that the file is deleted first, even if the host holding the files to download is unavailable, or the operation fails during the download.
 
 Better try first with a smaller file on such nodes.
 Especially if the node is hard to reach for a proper clean setup.
@@ -941,20 +1204,73 @@ See the ``Custom-sample.h`` file for some examples.
 Allow Fetch by Command
 ----------------------
 
-This checkbox allows provisioning via commands.
-These commands are not restricted, so they can also be given via HTTP or MQTT.
+This list of checkboxes per file allows provisioning via commands.
+These ``Provision*`` commands are not restricted, so they can also be given via HTTP or MQTT.
 
 However, they can only be executed when:
 
-* Allow Fetch by Command is enabled
-* the file to download is checked
+* the file at Allow Fetch by Command is checked
+* the file at Files to Download is *also* checked
 * URL (+ optional credentials) is stored
 
 The commands are:
 
+Changed: 2023-11-18: Single-word commands split into 2 words: ``Provision,<subcmd>[,<params>]``
 
-* ``ProvisionConfig`` Fetch ``config.dat``
-* ``ProvisionSecurity`` Fetch ``security.dat``
-* ``ProvisionNotification`` Fetch ``notification.dat``
-* ``ProvisionProvision`` Fetch ``provisioning.dat``
-* ``ProvisionRules,1`` Fetch ``rules1.txt``
+* ``Provision,Config`` Fetch ``config.dat``
+* ``Provision,Security`` Fetch ``security.dat``
+* ``Provision,Notification`` Fetch ``notification.dat`` (When the Notification feature is included in the build.)
+* ``Provision,Provision`` Fetch ``provisioning.dat``
+* ``Provision,Rules,1`` Fetch ``rules1.txt``
+* ``Provision,CustomCdnUrl`` Fetch ``customcdnurl.dat`` (When the Custom CDN Url feature is included in the build.)
+
+* ``Provision,Firmware,<FirmwareBinary.bin>`` Fetch and install ``FirmwareBinary.bin`` on the unit
+
+Once the Firmware download & install is finished the outcome is completed by a generated event (gets the download filename as an argument):
+
+* ``ProvisionFirmware#Success=<FirmwareBinary.bin>`` When download and install where succesfull
+* ``ProvisionFirmware#Failed=<FirmwareBinary.bin>`` When something went wrong during download or install
+
+These events can be handled in rules, an provisioning support script could look like this:
+
+.. code-block:: none
+
+  On updateSettings Do
+    provision,provision
+    provision,config
+  Endon
+
+  On updateCredentials Do
+    provision,security  
+  Endon
+
+  On updateRules Do
+    provision,rules,1
+    provision,rules,2
+    provision,rules,3
+  Endon
+
+  On updateRulesSettings Do
+    AsyncEvent,updateSettings
+    AsyncEvent,updateRules
+    Reboot
+  Endon
+
+  // e.g.
+  // event,PerformFirmwareUpdate=firmware_max_ESP32_16M8M_LittleFS.bin
+  On PerformFirmwareUpdate=* Do
+    pwm,2,100,0,8
+    provision,firmware,%eventvalue1%
+  Endon
+
+  On provisionfirmware#success=* Do
+    gpio,2,0
+    Reboot
+  Endon
+
+  On provisionfirmware#failure Do
+    gpio,2,0
+    Reboot  
+  Endon
+
+

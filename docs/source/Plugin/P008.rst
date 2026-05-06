@@ -13,7 +13,9 @@ Type: |P008_type|
 
 Name: |P008_name|
 
-Status: |P008_status|
+Status ESP32: |P008_status|
+
+Status ESP8266: |P008_status_lb|
 
 GitHub: |P008_github|_
 
@@ -60,6 +62,11 @@ Supported hardware
 .. ~~~~~~
 
 .. .. include:: P008_events.repl
+
+Get Config values
+~~~~~~~~~~~~~~~~~
+
+.. include:: P008_config_values.repl
 
 Change log
 ----------

@@ -9,6 +9,7 @@
 #include "../WebServer/Chart_JS.h"
 #include "../WebServer/HTML_wrappers.h"
 
+
 PluginTaskData_base::PluginTaskData_base()
   : _taskdata_pluginID(INVALID_PLUGIN_ID)
 #if FEATURE_PLUGIN_STATS
@@ -16,15 +17,15 @@ PluginTaskData_base::PluginTaskData_base()
 #endif // if FEATURE_PLUGIN_STATS
 {}
 
-PluginTaskData_base::~PluginTaskData_base() {
+
+PluginTaskData_base::~PluginTaskData_base()  {
 #if FEATURE_PLUGIN_STATS
   delete _plugin_stats_array;
   _plugin_stats_array = nullptr;
 #endif // if FEATURE_PLUGIN_STATS
 }
 
-bool PluginTaskData_base::hasPluginStats() const
-{
+bool PluginTaskData_base::hasPluginStats() const {
 #if FEATURE_PLUGIN_STATS
 
   if (_plugin_stats_array != nullptr) {
@@ -34,8 +35,7 @@ bool PluginTaskData_base::hasPluginStats() const
   return false;
 }
 
-bool PluginTaskData_base::hasPeaks() const
-{
+bool PluginTaskData_base::hasPeaks() const {
 #if FEATURE_PLUGIN_STATS
 
   if (_plugin_stats_array != nullptr) {
@@ -45,8 +45,7 @@ bool PluginTaskData_base::hasPeaks() const
   return false;
 }
 
-uint8_t PluginTaskData_base::nrSamplesPresent() const
-{
+size_t PluginTaskData_base::nrSamplesPresent() const {
 #if FEATURE_PLUGIN_STATS
 
   if (_plugin_stats_array != nullptr) {
@@ -57,11 +56,17 @@ uint8_t PluginTaskData_base::nrSamplesPresent() const
 }
 
 #if FEATURE_PLUGIN_STATS
+
 void PluginTaskData_base::initPluginStats(taskVarIndex_t taskVarIndex)
 {
   if (taskVarIndex < VARS_PER_TASK) {
     if (_plugin_stats_array == nullptr) {
-      _plugin_stats_array = new (std::nothrow) PluginStats_array();
+      constexpr unsigned size = sizeof(PluginStats_array);
+      void *ptr               = special_calloc(1, size);
+
+      if (ptr != nullptr) {
+        _plugin_stats_array = new (ptr) PluginStats_array();
+      }
     }
 
     if (_plugin_stats_array != nullptr) {
@@ -82,13 +87,23 @@ void PluginTaskData_base::clearPluginStats(taskVarIndex_t taskVarIndex)
   }
 }
 
+void PluginTaskData_base::processTimeSet(const double& time_offset)
+{
+  if (_plugin_stats_array != nullptr) {
+    _plugin_stats_array->processTimeSet(time_offset);
+  }
+}
+
 #endif // if FEATURE_PLUGIN_STATS
-void PluginTaskData_base::pushPluginStatsValues(struct EventStruct *event, bool trackPeaks)
+
+void PluginTaskData_base::pushPluginStatsValues(struct EventStruct *event,
+                                                bool                trackPeaks,
+                                                bool                onlyUpdateTimestampWhenSame)
 {
 #if FEATURE_PLUGIN_STATS
 
   if (_plugin_stats_array != nullptr) {
-    _plugin_stats_array->pushPluginStatsValues(event, trackPeaks);
+    _plugin_stats_array->pushPluginStatsValues(event, trackPeaks, onlyUpdateTimestampWhenSame);
   }
 #endif // if FEATURE_PLUGIN_STATS
 }
@@ -105,7 +120,8 @@ bool PluginTaskData_base::plugin_get_config_value_base(struct EventStruct *event
   return false;
 }
 
-bool PluginTaskData_base::plugin_write_base(struct EventStruct *event, const String& string)
+bool PluginTaskData_base::plugin_write_base(struct EventStruct *event,
+                                            const String      & string)
 {
 #if FEATURE_PLUGIN_STATS
 
@@ -117,6 +133,7 @@ bool PluginTaskData_base::plugin_write_base(struct EventStruct *event, const Str
 }
 
 #if FEATURE_PLUGIN_STATS
+
 bool PluginTaskData_base::webformLoad_show_stats(struct EventStruct *event) const
 {
   if (_plugin_stats_array != nullptr) {
@@ -126,10 +143,34 @@ bool PluginTaskData_base::webformLoad_show_stats(struct EventStruct *event) cons
 }
 
 # if FEATURE_CHART_JS
-void PluginTaskData_base::plot_ChartJS() const
+
+void PluginTaskData_base::plot_ChartJS(bool onlyJSON) const
 {
   if (_plugin_stats_array != nullptr) {
-    _plugin_stats_array->plot_ChartJS();
+    _plugin_stats_array->plot_ChartJS(onlyJSON);
+  }
+}
+
+void PluginTaskData_base::plot_ChartJS_scatter(
+  taskVarIndex_t                values_X_axis_index,
+  taskVarIndex_t                values_Y_axis_index,
+  const __FlashStringHelper    *id,
+  const ChartJS_title         & chartTitle,
+  const ChartJS_dataset_config& datasetConfig,
+  bool                          showAverage,
+  const String                & options,
+  bool                          onlyJSON) const
+{
+  if (_plugin_stats_array != nullptr) {
+    _plugin_stats_array->plot_ChartJS_scatter(
+      values_X_axis_index,
+      values_Y_axis_index,
+      id,
+      chartTitle,
+      datasetConfig,
+      showAverage,
+      options,
+      onlyJSON);
   }
 }
 

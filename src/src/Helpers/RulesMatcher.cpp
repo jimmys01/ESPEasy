@@ -18,8 +18,8 @@ bool ruleMatch(String event, String rule) {
   }
 
   rule.trim();
-  parseTemplate(rule);
   parseStandardConversions(rule, false);
+  rule = parseTemplate(rule);
 
   event.trim();
 
@@ -36,6 +36,7 @@ bool ruleMatch(String event, String rule) {
     if ((pos1 > 0) && (pos2 > 0)) {
       if (event.substring(0, pos1).equalsIgnoreCase(rule.substring(0, pos2))) // if this is a clock rule
       {
+//        addLog(LOG_LEVEL_INFO, concat(F("Clock#Time="), rule.substring(pos2 + 1)));
         unsigned long clockEvent = string2TimeLong(event.substring(pos1 + 1));
         unsigned long clockSet   = string2TimeLong(rule.substring(pos2 + 1));
 
@@ -71,11 +72,13 @@ bool ruleMatch(String event, String rule) {
 
 
   // parse event into verb and value
-  double value = 0;
+  ESPEASY_RULES_FLOAT_TYPE value{};
   int    equal_pos   = event.indexOf('=');
 
+  int nrDecimalsValue{};
+
   if (equal_pos >= 0) {
-    if (!validDoubleFromString(event.substring(equal_pos + 1), value)) {
+    if (!validDoubleFromString(event.substring(equal_pos + 1), value, nrDecimalsValue)) {
       return false;
 
       // FIXME TD-er: What to do when trying to match NaN values?
@@ -93,9 +96,10 @@ bool ruleMatch(String event, String rule) {
   }
 
   const bool stringMatch = event.equalsIgnoreCase(rule.substring(0, posStart));
-  double     ruleValue   = 0;
+  ESPEASY_RULES_FLOAT_TYPE     ruleValue{};
+  int nrDecimalsRuleValue{};
 
-  if (!validDoubleFromString(rule.substring(posEnd), ruleValue)) {
+  if (!validDoubleFromString(rule.substring(posEnd), ruleValue, nrDecimalsRuleValue)) {
     return false;
 
     // FIXME TD-er: What to do when trying to match NaN values?
@@ -104,7 +108,8 @@ bool ruleMatch(String event, String rule) {
   bool match = false;
 
   if (stringMatch) {
-    match = compareDoubleValues(compare, value, ruleValue);
+    const int minimalNrDecimals = std::min(nrDecimalsValue, nrDecimalsRuleValue);
+    match = compareDoubleValues(compare, value, ruleValue, minimalNrDecimals);
   }
   #ifndef BUILD_NO_RAM_TRACKER
   checkRAM(F("ruleMatch2"));
@@ -112,7 +117,10 @@ bool ruleMatch(String event, String rule) {
   return match;
 }
 
-bool compareIntValues(char compare, const int& Value1, const int& Value2)
+
+bool compareIntValues(char       compare,
+                      int64_t Value1,
+                      int64_t Value2)
 {
   switch (compare) {
     case '>' + '=': return Value1 >= Value2;
@@ -125,8 +133,40 @@ bool compareIntValues(char compare, const int& Value1, const int& Value2)
   return false;
 }
 
-bool compareDoubleValues(char compare, const double& Value1, const double& Value2)
+#if FEATURE_STRING_VARIABLES
+bool compareStringValues(char       compare,
+                         String& Value1,
+                         String& Value2)
 {
+  switch (compare) {
+    case '>' + '=': return Value1 >= Value2;
+    case '<' + '=': return Value1 <= Value2;
+    case '<' + '>': return !Value1.equals(Value2);
+    case '>':       return Value1 > Value2;
+    case '<':       return Value1 < Value2;
+    case '=':       return Value1.equals(Value2);
+  }
+  return false;
+}
+#endif // if FEATURE_STRING_VARIABLES
+
+bool compareDoubleValues(char          compare,
+                         const ESPEASY_RULES_FLOAT_TYPE& Value1,
+                         const ESPEASY_RULES_FLOAT_TYPE& Value2,
+                         int nrDecimals)
+{
+  if (nrDecimals == 0) {
+    return compareIntValues(compare, Value1, Value2);
+  }
+  if (nrDecimals > 0) {
+    if (std::abs(Value1 - Value2) < 1) {
+      const int factor = computeDecimalFactorForDecimals(nrDecimals);
+      return compareIntValues(
+        compare, 
+        std::round(Value1 * factor), 
+        std::round(Value2 * factor));
+    }
+  }
   switch (compare) {
     case '>' + '=': return !definitelyLessThan(Value1, Value2);
     case '<' + '=': return !definitelyGreaterThan(Value1, Value2);
@@ -238,8 +278,8 @@ bool getEventFromRulesLine(const String& line, String& event, String& action)
   event.trim();
 
   // Ignore escape char
-  event.replace(F("["), EMPTY_STRING);
-  event.replace(F("]"), EMPTY_STRING);
+//  removeChar(event, '[');
+//  removeChar(event, ']');
 
   // action: The optional part after the " do"
   action = line.substring(pos_do + 3);

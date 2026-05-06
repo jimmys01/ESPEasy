@@ -8,7 +8,6 @@
 	--bg5: #dbff0075;
 	--c2: #444;
 	--bg6: #fff;
-	--bdc2: #444 #444 #fff;
 	--c3: #000;
 	--bg7: #bdbdbd;
 	--bg8: #029b34;
@@ -19,6 +18,7 @@
 	--c6: #fff;
 	--ro: 0deg;
 	--iv: 0;
+	--tpm2: 140px;
 }
 
 [data-theme="dark"] {
@@ -31,7 +31,6 @@
 	--bg5: #553044;
 	--c2: #fff;
 	--bg6: #222;
-	--bdc2: transparent;
 	--c3: #fff;
 	--bg7: #00000030;
 	--bg8: #30553d;
@@ -55,7 +54,6 @@
 		--bg5: #553044;
 		--c2: #fff;
 		--bg6: #222;
-		--bdc2: transparent;
 		--c3: #fff;
 		--bg7: #00000030;
 		--bg8: #30553d;
@@ -111,7 +109,7 @@ textarea {
 
 h1 {
 	font-size: 16pt;
-	margin: 8px 0
+	white-space: nowrap
 }
 
 h3 {
@@ -124,12 +122,7 @@ h6 {
 	font-size: 10pt
 }
 
-code,
-kbd,
-pre,
-samp,
-tt,
-xmp {
+pre {
 	font: 1em monospace, monospace
 }
 
@@ -137,8 +130,8 @@ xmp {
 	border: 0;
 	border-radius: 5px;
 	color: var(--c6);
-	margin: 4px;
-	padding: 4px 16px
+	margin: 5px;
+	padding: 5px 15px
 }
 
 input,
@@ -151,16 +144,22 @@ select,
 .checkmark,
 input,
 select,
-textarea {
-	border-color: gray;
-	border-style: solid;
-	border-width: 1px
+hr,
+textarea,
+#toastmessage,
+.dotmark,
+.logviewer {
+	border: .1px solid gray;
+}
+
+input[disabled],
+input[disabled]:hover {
+	background-color: var(--bg7);
 }
 
 .button.link.wide {
 	display: inline-block;
 	text-align: center;
-	width: 100%
 }
 
 .button.link.red {
@@ -186,24 +185,29 @@ textarea {
 
 input,
 select,
-textarea {
+textarea,
+summary {
 	margin: 4px;
 	padding: 4px 8px
 }
 
 .wide {
 	margin-bottom: 5px;
-	max-width: 350px;
+	max-width: 300px;
+	min-width: 85px;
 	width: 95%
 }
 
+textarea.wide {
+	max-width: 1000px;
+}
+
 .xwide {
-	width: 350px
+	width: 300px
 }
 
 .widenumber {
-	max-width: 500px;
-	width: 100px
+	max-width: 100px;
 }
 
 .container,
@@ -246,18 +250,6 @@ textarea {
 
 #toastmessage {
 	background-color: var(--bg3)
-}
-
-#toastmessage,
-.dotmark,
-.logviewer {
-	border-color: gray;
-	border-style: solid
-}
-
-#toastmessage,
-.dotmark {
-	border-width: 1px
 }
 
 .container2 {
@@ -397,9 +389,6 @@ tbody {
 .multirow,
 .normal {
 	border-spacing: 0;
-	border-style: none;
-	min-width: 420px;
-	padding-bottom: 5px;
 	width: 100%
 }
 
@@ -439,7 +428,8 @@ textarea,
 }
 
 .apheader,
-.headermenu {
+.headermenu,
+.headermenu2 {
 	padding: 8px 12px;
 	width: 100vw
 }
@@ -449,31 +439,72 @@ textarea,
 	font-style: italic
 }
 
-.headermenu {
+.headermenu,
+.headermenu2 {
 	background-color: var(--bg11);
-	border-bottom: .1px solid #444;
-	height: 100px;
 	position: fixed;
 	top: 0;
-	z-index: 1
+	z-index: 1;
+	box-shadow: 0 0 10px 1px rgb(0 0 0 / 30%)
+}
+
+.headermenu {
+	height: 100px;
+	border-bottom: .1px solid #444;
+}
+
+.headermenu2 {
+	height: var(--tpm2);
 }
 
 .bodymenu {
-	height: 100vh;
+	min-height: 100vh;
 	padding-top: 100px
 }
 
-.menubar {
+.bodymenu2 {
+	min-height: 100vh;
+	padding-top: var(--tpm2)
+}
+
+.menubar,
+.menubar2 {
+	display: flex;
 	position: inherit;
+	overflow-x: scroll;
+	scrollbar-width: none
+}
+
+[class^="menubar"]::-webkit-scrollbar {
+  display: none;
+}
+
+.menubar {
 	top: 54px;
-	width: 100%
+	max-width: 1180px;
+}
+
+.menubar2 {
+	top: 99px;
+	background: var(--bg2);
+	width: 100vw;
+	left: 0;
+  border-block: .1px solid #222
 }
 
 a.menu {
 	align-items: center;
 	display: flex;
 	height: 46px;
-	justify-content: center
+	justify-content: center;
+	gap: 2px;
+	width: 100%
+}
+
+.menubar2 a.menu {
+	max-width: 70px;
+	height: 41px;
+	border-bottom: 0
 }
 
 .menu {
@@ -486,7 +517,7 @@ a.menu {
 
 .menu.active {
 	background-color: var(--bg6);
-	border-color: var(--bdc2);
+  border-color: #222;
 	color: var(--c3);
 	border-width: .1px
 }
@@ -555,6 +586,10 @@ section {
 	padding: 10px 0
 }
 
+summary {
+	cursor: pointer;
+}
+
 footer {
 	padding: 0 5px;
 	word-break: break-all
@@ -577,7 +612,7 @@ h6 {
 }
 
 .button,
-.container input:checked~.checkmark,
+.container input:checked~.checkmark:not(.disabled),
 .container2 input:checked~.dotmark {
 	background-color: var(--bg10)
 }
@@ -586,13 +621,25 @@ canvas {
 	filter: invert(var(--iv)) hue-rotate(var(--ro));
 }
 
-@media screen and (max-width:780px) {
+.tc1 {
+	width: 15vw;
+}
+
+@media screen and (max-width:1280px) {
+	.tc1 {
+		width: 25vw;
+	}
+}
+
+@media screen and (max-width:975px) {
 	.showmenulabel {
 		display: none
 	}
 
-	a.menu {
-		width: 12%
+	.menubar {
+		width: 100%;
+		max-width: 700px;
+		left: 0
 	}
 }
 
@@ -605,10 +652,5 @@ canvas {
 		left: 4px;
 		position: absolute;
 		z-index: 1
-	}
-
-	.container {
-		display: inline;
-		user-select: none
 	}
 }

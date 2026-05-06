@@ -5,8 +5,6 @@
 
 #ifdef USES_P092
 
-#include <Arduino.h>
-
 # ifdef LIMIT_BUILD_SIZE
 #  define P092_LIMIT_BUILD_SIZE
 # endif // ifdef LIMIT_BUILD_SIZE
@@ -46,7 +44,7 @@ public:
   volatile uint8_t ISR_DLB_Pin = 0xFF;
   volatile boolean ISR_Receiving = false; // receiving flag
   volatile boolean ISR_AllBitsReceived = false;
-  volatile uint16_t ISR_PulseCount = 0;   // number of received pulses
+  ESPEASY_VOLATILE(uint16_t) ISR_PulseCount = 0;   // number of received pulses
   volatile uint16_t ISR_PulseNumber = 0;  // max naumber of the received pulses
   volatile uint16_t ISR_MinPulseWidth = 0;
   volatile uint16_t ISR_MaxPulseWidth = 0;

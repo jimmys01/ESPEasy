@@ -10,29 +10,22 @@
 #include "../ESPEasyCore/Controller.h"
 #include "../ESPEasyCore/ESPEasyGPIO.h"
 #include "../ESPEasyCore/ESPEasy_Log.h"
-#include "../ESPEasyCore/ESPEasyNetwork.h"
-#include "../ESPEasyCore/ESPEasyWifi.h"
+#include "../../ESPEasy/net/ESPEasyNetwork.h"
 #include "../ESPEasyCore/ESPEasyRules.h"
 #include "../ESPEasyCore/Serial.h"
-#include "../Globals/ESPEasyWiFiEvent.h"
-#if FEATURE_ETHERNET
-#include "../Globals/ESPEasyEthEvent.h"
-#endif
 #include "../Globals/ESPEasy_Scheduler.h"
 #include "../Globals/ESPEasy_time.h"
 #include "../Globals/EventQueue.h"
 #include "../Globals/MainLoopCommand.h"
 #include "../Globals/MQTT.h"
-#include "../Globals/NetworkState.h"
 #include "../Globals/RTC.h"
-#include "../Globals/SecuritySettings.h"
 #include "../Globals/Services.h"
 #include "../Globals/Settings.h"
 #include "../Globals/Statistics.h"
-#include "../Globals/WiFi_AP_Candidates.h"
+#include "../../ESPEasy/net/Globals/WiFi_AP_Candidates.h"
 #include "../Helpers/ESPEasyRTC.h"
 #include "../Helpers/FS_Helper.h"
-#include "../Helpers/Hardware.h"
+#include "../Helpers/Hardware_temperature_sensor.h"
 #include "../Helpers/Memory.h"
 #include "../Helpers/Misc.h"
 #include "../Helpers/Networking.h"
@@ -40,10 +33,21 @@
 #include "../Helpers/StringGenerator_WiFi.h"
 #include "../Helpers/StringProvider.h"
 
+#include "../../ESPEasy/net/wifi/ESPEasyWifi.h"
+#include "../../ESPEasy/net/Globals/ESPEasyWiFi.h"
+#include "../../ESPEasy/net/Globals/ESPEasyWiFiEvent.h"
+#include "../../ESPEasy/net/Globals/NetworkState.h"
+#include "../../ESPEasy/net/Globals/NWPlugins.h"
+#include "../../ESPEasy/net/wifi/WiFi_State.h"
+
+
 #ifdef USES_C015
 #include "../../ESPEasy_fdwdecl.h"
 #endif
 
+#if FEATURE_MDNS
+#include "../Helpers/MDNS_Helper.h"
+#endif
 
 
 #define PLUGIN_ID_MQTT_IMPORT         37
@@ -56,6 +60,31 @@
 void run50TimesPerSecond() {
   String dummy;
   {
+    // Do network calls first, so any needed checks or updates are done 
+    // before any controller may need to use the network
+#ifdef ESP32
+    static const NetworkInterface *lastDefaultInterface = nullptr;
+    NetworkInterface * currentDefaultInterface = Network.getDefaultInterface();
+    if (nonDefaultNetworkInterface_gotIP || 
+        networkConnectionFailed || 
+        lastDefaultInterface != currentDefaultInterface) {
+      nonDefaultNetworkInterface_gotIP = false;
+
+      // TODO TD-er: Must do something else here on failed connect?
+      networkConnectionFailed = false;
+      ESPEasy::net::NWPluginCall(NWPlugin::Function::NWPLUGIN_PRIORITY_ROUTE_CHANGED, 0, dummy);
+      lastDefaultInterface = currentDefaultInterface;
+    }
+#endif
+
+    START_TIMER;
+    ESPEasy::net::NWPluginCall(NWPlugin::Function::NWPLUGIN_FIFTY_PER_SECOND, 0, dummy);
+    STOP_TIMER(NWPLUGIN_CALL_50PS);
+  }
+  {
+    ESPEasy::net::processNetworkEvents();
+  }
+  {
     START_TIMER;
     PluginCall(PLUGIN_FIFTY_PER_SECOND, 0, dummy);
     STOP_TIMER(PLUGIN_CALL_50PS);
@@ -65,6 +94,7 @@ void run50TimesPerSecond() {
     CPluginCall(CPlugin::Function::CPLUGIN_FIFTY_PER_SECOND, 0, dummy);
     STOP_TIMER(CPLUGIN_CALL_50PS);
   }
+
   processNextEvent();
 }
 
@@ -78,6 +108,11 @@ void run10TimesPerSecond() {
     START_TIMER;
     GPIO_Monitor10xSec();
     STOP_TIMER(PLUGIN_CALL_10PSU);
+  }
+  {
+    START_TIMER;
+    ESPEasy::net::NWPluginCall(NWPlugin::Function::NWPLUGIN_TEN_PER_SECOND, 0, dummy);
+    STOP_TIMER(NWPLUGIN_CALL_10PS);
   }
   {
     START_TIMER;
@@ -97,12 +132,17 @@ void run10TimesPerSecond() {
   }
   
   #ifdef USES_C015
-  if (NetworkConnected())
-      Blynk_Run_c015();
+  if (ESPEasy::net::NetworkConnected()) {
+    Blynk_Run_c015();
+  }
   #endif
-  #ifndef USE_RTOS_MULTITASKING
+  if (!UseRTOSMultitasking && 
+    (ESPEasy::net::NetworkConnected() || ESPEasy::net::wifi::wifiAPmodeActivelyUsed())) {
+    // FIXME TD-er: What about client connected via AP?
+    START_TIMER
     web_server.handleClient();
-  #endif
+    STOP_TIMER(WEBSERVER_HANDLE_CLIENT);
+  }
 }
 
 
@@ -119,25 +159,28 @@ void runOncePerSecond()
     RTC.flashDayCounter=0;
     saveToRTC();
     dailyResetCounter=0;
+    #ifndef LIMIT_BUILD_SIZE
     addLog(LOG_LEVEL_INFO, F("SYS  : Reset 24h counters"));
+    #endif
   }
 
-  if (Settings.ConnectionFailuresThreshold)
-    if (WiFiEventData.connectionFailures > Settings.ConnectionFailuresThreshold)
-      delayedReboot(60, ESPEasy_Scheduler::IntendedRebootReason_e::DelayedReboot);
-
+  if (Settings.ConnectionFailuresThreshold) {
+    auto data = ESPEasy::net::getDefaultRoute_NWPluginData_static_runtime();
+    if (data && data->getConnectionFailures() > Settings.ConnectionFailuresThreshold)
+      delayedReboot(60, IntendedRebootReason_e::DelayedReboot);
+  }
   if (cmd_within_mainloop != 0)
   {
     switch (cmd_within_mainloop)
     {
       case CMD_WIFI_DISCONNECT:
         {
-          WifiDisconnect();
+          ESPEasy::net::wifi::WifiDisconnect();
           break;
         }
       case CMD_REBOOT:
         {
-          reboot(ESPEasy_Scheduler::IntendedRebootReason_e::CommandReboot);
+          reboot(IntendedRebootReason_e::CommandReboot);
           break;
         }
     }
@@ -151,14 +194,11 @@ void runOncePerSecond()
     {
       // FIXME TD-er: What to do when the system time is not (yet) present?
       if (node_time.systemTimePresent()) {
-        String event;
-        event.reserve(21);
-        event += F("Clock#Time=");
-        event += node_time.weekday_str();
-        event += ',';
-        event += node_time.getTimeString(':', false);
-
         // TD-er: Do not add to the eventQueue, but execute right now.
+        const String event = strformat(
+          F("Clock#Time=%s,%s"), 
+          node_time.weekday_str().c_str(),
+          node_time.getTimeString(':', false).c_str());
         rulesProcessing(event);
       }
     }
@@ -169,14 +209,39 @@ void runOncePerSecond()
   PluginCall(PLUGIN_ONCE_A_SECOND, 0, dummy);
 //  unsigned long elapsed = micros() - start;
 
+#if FEATURE_NETWORK_STATS
+  for (ESPEasy::net::networkIndex_t x = 0; x < NETWORK_MAX; x++) {
+    if (Settings.getNetworkEnabled(x)) {
+      EventStruct tempEvent;
+      tempEvent.NetworkIndex = x;
+      ESPEasy::net::NWPluginCall(NWPlugin::Function::NWPLUGIN_RECORD_STATS, &tempEvent);
+    }
+  }
+#endif
 
   // I2C Watchdog feed
+#if FEATURE_I2C
   if (Settings.WDI2CAddress != 0)
   {
-    Wire.beginTransmission(Settings.WDI2CAddress);
-    Wire.write(0xA5);
-    Wire.endTransmission();
+    #if FEATURE_I2C_MULTIPLE
+    I2CSelectHighClockSpeed(Settings.getI2CInterfaceWDT()); // Select bus
+    #endif // if FEATURE_I2C_MULTIPLE
+    I2C_write8(Settings.WDI2CAddress, 0xA5);
   }
+#endif
+
+  #if FEATURE_MDNS
+  #ifdef ESP8266
+  // Allow MDNS processing
+  if (ESPEasy::net::NetworkConnected()) {
+    MDNS.announce();
+  }
+  #endif
+  #endif // if FEATURE_MDNS
+
+  #if FEATURE_INTERNAL_TEMPERATURE && defined(ESP32_CLASSIC)
+  getInternalTemperature(); // Just read the value every second to hopefully get a valid next reading on original ESP32
+  #endif // if FEATURE_INTERNAL_TEMPERATURE && defined(ESP32_CLASSIC)
 
   checkResetFactoryPin();
   STOP_TIMER(PLUGIN_CALL_1PS);
@@ -191,37 +256,45 @@ void runEach30Seconds()
   checkRAMtoLog();
   #endif
   wdcounter++;
-  if (loglevelActiveFor(LOG_LEVEL_INFO)) {
-    String log;
-    log.reserve(80);
-    log = F("WD   : Uptime ");
-    log += getUptimeMinutes();
-    log += F(" ConnectFailures ");
-    log += WiFiEventData.connectionFailures;
-    log += F(" FreeMem ");
-    log += FreeMem();
-    bool logWiFiStatus = true;
-    #if FEATURE_ETHERNET
-    if(active_network_medium == NetworkMedium_t::Ethernet) {
-      logWiFiStatus = false;
-      log += F( " EthSpeedState ");
-      log += getValue(LabelType::ETH_SPEED_STATE);
-      log += F(" ETH status: ");
-      log += EthEventData.ESPEasyEthStatusToString();
+  if (loglevelActiveFor(LOG_LEVEL_INFO)) {  
+    auto data = ESPEasy::net::getDefaultRoute_NWPluginData_static_runtime();
+    if (!data) {
+      addLogMove(LOG_LEVEL_INFO, strformat(
+        F("WD   : Uptime %d  FreeMem %u"),
+        getUptimeMinutes(),
+        FreeMem()));
+    } else {
+      String log = strformat(
+        F("WD   : Uptime %d  ConnectFailures %u FreeMem %u"),
+        getUptimeMinutes(),
+        data->getConnectionFailures(),
+        FreeMem());
+      bool logWiFiStatus = true;
+      #if FEATURE_ETHERNET
+      if(active_network_medium == ESPEasy::net::NetworkMedium_t::Ethernet) {
+        logWiFiStatus = false;
+        log += F( " EthSpeedState ");
+        log += getValue(LabelType::ETH_SPEED_STATE);
+//        log += F(" ETH status: ");
+//        log += EthEventData.ESPEasyEthStatusToString();
+      }
+      #endif // if FEATURE_ETHERNET
+      if (logWiFiStatus) {
+        log += strformat(
+          F(" WiFiStatus: %s ESPeasy internal wifi status: %s (%s)"),
+          ArduinoWifiStatusToString(WiFi.status()).c_str(),
+          FsP(ESPEasy::net::wifi::toString(ESPEasyWiFi.getState())),
+          data->statusToString().c_str());
+      }
+  //    log += F(" ListenInterval ");
+  //    log += WiFi.getListenInterval();
+      addLogMove(LOG_LEVEL_INFO, log);
+#if FEATURE_DEFINE_SERIAL_CONSOLE_PORT
+  //    addLogMove(LOG_LEVEL_INFO,  ESPEASY_SERIAL_CONSOLE_PORT.getLogString());
+#endif
     }
-    #endif // if FEATURE_ETHERNET
-    if (logWiFiStatus) {
-      log += F(" WiFiStatus ");
-      log += ArduinoWifiStatusToString(WiFi.status());
-      log += F(" ESPeasy internal wifi status: ");
-      log += WiFiEventData.ESPeasyWifiStatusToString();
-    }
-
-//    log += F(" ListenInterval ");
-//    log += WiFi.getListenInterval();
-    addLogMove(LOG_LEVEL_INFO, log);
   }
-  WiFi_AP_Candidates.purge_expired();
+  ESPEasy::net::wifi::WiFi_AP_Candidates.purge_expired();
   #if FEATURE_ESPEASY_P2P
   sendSysInfoUDP(1);
   refreshNodeList();
@@ -238,9 +311,9 @@ void runEach30Seconds()
   #endif // if FEATURE_SSDP
   #endif
 #if FEATURE_ADC_VCC
-  if (!WiFiEventData.wifiConnectInProgress) {
+//  if (!WiFiEventData.wifiConnectInProgress) {
     vcc = ESP.getVcc() / 1000.0f;
-  }
+//  }
 #endif
 
   #if FEATURE_REPORTING
@@ -254,24 +327,25 @@ void runEach30Seconds()
 
 void scheduleNextMQTTdelayQueue() {
   if (MQTTDelayHandler != nullptr) {
-    Scheduler.scheduleNextDelayQueue(ESPEasy_Scheduler::IntervalTimer_e::TIMER_MQTT_DELAY_QUEUE, MQTTDelayHandler->getNextScheduleTime());
+    Scheduler.scheduleNextDelayQueue(SchedulerIntervalTimer_e::TIMER_MQTT_DELAY_QUEUE, MQTTDelayHandler->getNextScheduleTime());
   }
 }
 
 void schedule_all_MQTTimport_tasks() {
-  controllerIndex_t ControllerIndex = firstEnabledMQTT_ControllerIndex();
+  constexpr pluginID_t PLUGIN_MQTT_IMPORT(PLUGIN_ID_MQTT_IMPORT);
 
-  if (!validControllerIndex(ControllerIndex)) { return; }
-
-  deviceIndex_t DeviceIndex = getDeviceIndex(PLUGIN_ID_MQTT_IMPORT); // Check if P037_MQTTimport is present in the build
+  deviceIndex_t DeviceIndex = getDeviceIndex(PLUGIN_MQTT_IMPORT); // Check if P037_MQTTimport is present in the build
   if (validDeviceIndex(DeviceIndex)) {
     for (taskIndex_t task = 0; task < TASKS_MAX; task++) {
-      if ((Settings.TaskDeviceNumber[task] == PLUGIN_ID_MQTT_IMPORT) &&
+      if ((Settings.getPluginID_for_task(task) == PLUGIN_MQTT_IMPORT) &&
           (Settings.TaskDeviceEnabled[task])) {
         // Schedule a call to each enabled MQTT import plugin to notify the broker connection state
         EventStruct event(task);
         event.Par1 = MQTTclient_connected ? 1 : 0;
-        Scheduler.schedule_plugin_task_event_timer(DeviceIndex, PLUGIN_MQTT_CONNECTION_STATE, std::move(event));
+        Scheduler.schedule_plugin_task_event_timer(
+          task,
+          PLUGIN_MQTT_CONNECTION_STATE, 
+          std::move(event));
       }
     }
   }
@@ -288,45 +362,71 @@ void processMQTTdelayQueue() {
   }
 
   START_TIMER;
-  MQTT_queue_element *element(MQTTDelayHandler->getNext());
+  MQTT_queue_element *element(static_cast<MQTT_queue_element *>(MQTTDelayHandler->getNext()));
 
   if (element == nullptr) { return; }
 
-  if (MQTTclient.publish(element->_topic.c_str(), element->_payload.c_str(), element->_retained)) {
-    if (WiFiEventData.connectionFailures > 0) {
-      --WiFiEventData.connectionFailures;
+  bool handled = false;
+
+  if (element->_call_PLUGIN_PROCESS_CONTROLLER_DATA) {
+    struct EventStruct TempEvent(element->_taskIndex);
+    String dummy;
+
+    // FIXME TD-er: Do we need anything from the element in the event?
+//    TempEvent.String1 = element->_topic;
+//    TempEvent.String2 = element->_payload;
+    if (PluginCall(PLUGIN_PROCESS_CONTROLLER_DATA, &TempEvent, dummy)) {
+      handled = true;
+      MQTTDelayHandler->markProcessed(true);
+    } else {
+      MQTTDelayHandler->markProcessed(false);
     }
-    MQTTDelayHandler->markProcessed(true);
-  } else {
-    MQTTDelayHandler->markProcessed(false);
+  } else
+  if (!handled) {
+    if (MQTTclient.publish(element->_topic.c_str(), element->_payload.c_str(), element->_retained)) {
+      auto data = ESPEasy::net::getDefaultRoute_NWPluginData_static_runtime();
+      if (data) {
+        data->markPublishSuccess();
+      }
+      MQTTDelayHandler->markProcessed(true);
+    } else {
+      MQTTDelayHandler->markProcessed(false);
 #ifndef BUILD_NO_DEBUG
 
-    if (loglevelActiveFor(LOG_LEVEL_DEBUG)) {
-      String log = F("MQTT : process MQTT queue not published, ");
-      log += MQTTDelayHandler->sendQueue.size();
-      log += F(" items left in queue");
-      addLogMove(LOG_LEVEL_DEBUG, log);
-    }
+      if (loglevelActiveFor(LOG_LEVEL_DEBUG)) {
+        String log = F("MQTT : process MQTT queue not published, ");
+        log += MQTTDelayHandler->sendQueue.size();
+        log += F(" items left in queue");
+        addLogMove(LOG_LEVEL_DEBUG, log);
+      }
 #endif // ifndef BUILD_NO_DEBUG
+    }
   }
-  Scheduler.setIntervalTimerOverride(ESPEasy_Scheduler::IntervalTimer_e::TIMER_MQTT, 10); // Make sure the MQTT is being processed as soon as possible.
+  Scheduler.setIntervalTimerOverride(SchedulerIntervalTimer_e::TIMER_MQTT, 10); // Make sure the MQTT is being processed as soon as possible.
   scheduleNextMQTTdelayQueue();
   STOP_TIMER(MQTT_DELAY_QUEUE);
 }
 
 void updateMQTTclient_connected() {
-  if (MQTTclient_connected != MQTTclient.connected()) {
-    MQTTclient_connected = !MQTTclient_connected;
+  const bool actual_MQTTclient_connected = ESPEasy::net::NetworkConnected() && MQTTclient.connected();
+  if (MQTTclient_connected != actual_MQTTclient_connected) {
+    MQTTclient_connected = actual_MQTTclient_connected;
+    if (!actual_MQTTclient_connected) mqtt.stop();  // Make sure PubSubClient isn't trying to do a graceful disconnect
+    MQTTclient_connected_stats.set(actual_MQTTclient_connected);
     if (!MQTTclient_connected) {
       if (loglevelActiveFor(LOG_LEVEL_ERROR)) {
         String connectionError = F("MQTT : Connection lost, state: ");
         connectionError += getMQTT_state();
+#ifndef BUILD_NO_DEBUG
+        auto duration_ms = MQTTclient_connected_stats.getLastOnDuration_ms();
+        if (duration_ms > 0) {
+          connectionError += concat(F(" Connected duration: "), format_msec_duration_HMS(duration_ms));
+          connectionError += concat(F(" (successful) Reconnect Count: "), MQTTclient_connected_stats.getCycleCount());
+        }
+#endif
         addLogMove(LOG_LEVEL_ERROR, connectionError);
       }
       MQTTclient_must_send_LWT_connected = false;
-    } else {
-      // Now schedule all tasks using the MQTT controller.
-      schedule_all_MQTTimport_tasks();
     }
     if (Settings.UseRules) {
       if (MQTTclient_connected) {
@@ -335,20 +435,26 @@ void updateMQTTclient_connected() {
         eventQueue.add(F("MQTT#Disconnected"));
       }
     }
+    // Now schedule all tasks using the MQTT Import plugin.
+    schedule_all_MQTTimport_tasks();
   }
   if (!MQTTclient_connected) {
     // As suggested here: https://github.com/letscontrolit/ESPEasy/issues/1356
     if (timermqtt_interval < 30000) {
-      timermqtt_interval += 5000;
+      timermqtt_interval += 500;
     }
   } else {
-    timermqtt_interval = 250;
+    timermqtt_interval = 100;
   }
-  Scheduler.setIntervalTimer(ESPEasy_Scheduler::IntervalTimer_e::TIMER_MQTT);
+  Scheduler.setIntervalTimer(SchedulerIntervalTimer_e::TIMER_MQTT);
   scheduleNextMQTTdelayQueue();
+  #if FEATURE_MQTT_CONNECT_BACKGROUND
+  MQTTConnectInBackground(CONTROLLER_MAX, true); // Report state
+  #endif // if FEATURE_MQTT_CONNECT_BACKGROUND
 }
 
 void runPeriodicalMQTT() {
+  START_TIMER
   // MQTT_KEEPALIVE = 15 seconds.
   if (!NetworkConnected(10)) {
     updateMQTTclient_connected();
@@ -365,23 +471,18 @@ void runPeriodicalMQTT() {
     }
   } else {
     if (MQTTclient.connected()) {
+      #if FEATURE_MQTT_CONNECT_BACKGROUND
+      if (MQTT_task_data.taskHandle) {
+        vTaskDelete(MQTT_task_data.taskHandle);
+        MQTT_task_data.taskHandle = NULL;
+      }
+      MQTT_task_data.status = MQTT_connect_status_e::Disconnected;
+      #endif // if FEATURE_MQTT_CONNECT_BACKGROUND
       MQTTclient.disconnect();
       updateMQTTclient_connected();
     }
   }
-}
-
-// FIXME TD-er: Must move to a more logical part of the code
-controllerIndex_t firstEnabledMQTT_ControllerIndex() {
-  for (controllerIndex_t i = 0; i < CONTROLLER_MAX; ++i) {
-    protocolIndex_t ProtocolIndex = getProtocolIndex_from_ControllerIndex(i);
-    if (validProtocolIndex(ProtocolIndex)) {
-      if (Protocol[ProtocolIndex].usesMQTT && Settings.ControllerEnabled[i]) {
-        return i;
-      }
-    }
-  }
-  return INVALID_CONTROLLER_INDEX;
+  STOP_TIMER(PERIODICAL_MQTT);
 }
 
 
@@ -454,6 +555,13 @@ void flushAndDisconnectAllClients() {
     }
 #if FEATURE_MQTT
     if (mqttControllerEnabled && MQTTclient.connected()) {
+      #if FEATURE_MQTT_CONNECT_BACKGROUND
+      if (MQTT_task_data.taskHandle) {
+        vTaskDelete(MQTT_task_data.taskHandle);
+        MQTT_task_data.taskHandle = NULL;
+      }
+      MQTT_task_data.status = MQTT_connect_status_e::Disconnected;
+      #endif // if FEATURE_MQTT_CONNECT_BACKGROUND
       MQTTclient.disconnect();
       updateMQTTclient_connected();
     }
@@ -461,22 +569,31 @@ void flushAndDisconnectAllClients() {
     saveToRTC();
     delay(100); // Flush anything in the network buffers.
   }
+
   process_serialWriteBuffer();
 }
 
 
-void prepareShutdown(ESPEasy_Scheduler::IntendedRebootReason_e reason)
+void prepareShutdown(IntendedRebootReason_e reason)
 {
+#if FEATURE_MDNS
+  end_mDNS();
+#endif
+
+//  WiFiEventData.intent_to_reboot = true;
 #if FEATURE_MQTT
   runPeriodicalMQTT(); // Flush outstanding MQTT messages
 #endif // if FEATURE_MQTT
   process_serialWriteBuffer();
   flushAndDisconnectAllClients();
   saveUserVarToRTC();
-  setWifiMode(WIFI_OFF);
+  CPluginCall(CPlugin::Function::CPLUGIN_EXIT_ALL, 0);
+  ESPEasy::net::NWPluginCall(NWPlugin::Function::NWPLUGIN_EXIT_ALL, 0);
+//  ESPEasy::net::wifi::setWifiMode(WIFI_OFF);
   ESPEASY_FS.end();
+  process_serialWriteBuffer();
   delay(100); // give the node time to flush all before reboot or sleep
-  node_time.now();
+  node_time.now_();
   Scheduler.markIntendedReboot(reason);
   saveToRTC();
 }

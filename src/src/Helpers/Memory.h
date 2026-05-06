@@ -1,7 +1,6 @@
 #ifndef HELPERS_MEMORY_H
 #define HELPERS_MEMORY_H
 
-#include <Arduino.h>
 
 #include "../../ESPEasy_common.h"
 
@@ -39,13 +38,28 @@ bool     allocatedOnStack(const void *address);
 /********************************************************************************************\
    Get free system mem
  \*********************************************************************************************/
-unsigned long FreeMem();
+uint32_t FreeMem();
 
 #ifdef USE_SECOND_HEAP
-unsigned long FreeMem2ndHeap();
+uint32_t FreeMem2ndHeap();
 #endif
 
-unsigned long getMaxFreeBlock();
+uint32_t getMaxFreeBlock();
 
 
 #endif
+
+/********************************************************************************************\
+   Special alloc functions to allocate in PSRAM if available
+ \*********************************************************************************************/
+
+void *special_malloc(uint32_t size);
+void *special_realloc(void *ptr, size_t size);
+void *special_calloc(size_t num, size_t size);
+
+
+// Perform a special memory allocate for the buffer pointer in the String object
+// Allocation is tried either on 2nd heap (ESP8266) or PSRAM (ESP32)
+// when possible.
+bool String_reserve_special(String& str, size_t size);
+

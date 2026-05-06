@@ -10,7 +10,7 @@
 #include "../ESPEasyCore/ESPEasyGPIO.h"
 #include "../ESPEasyCore/ESPEasy_Log.h"
 #include "../Globals/GlobalMapPortStatus.h"
-#include "../Helpers/Hardware.h"
+#include "../Helpers/Hardware_PWM.h"
 #include "../Helpers/PortStatus.h"
 #include "../Helpers/StringConverter.h"
 
@@ -59,8 +59,10 @@ const __FlashStringHelper * Command_Servo(struct EventStruct *event, const char 
       tempStatus.monitor = 0;
       tempStatus.command = 0;
       savePortStatus(key, tempStatus);
+#ifndef BUILD_NO_DEBUG
       addLog(LOG_LEVEL_INFO, concat(log, F(" Servo detached")));
-      return return_command_success();
+#endif
+      return return_command_success_flashstr();
 
     }
     # ifdef ESP32
@@ -86,10 +88,12 @@ const __FlashStringHelper * Command_Servo(struct EventStruct *event, const char 
     SendStatusOnlyIfNeeded(event, SEARCH_PIN_STATE, key, log, 0);
 
     // SendStatus(event, getPinStateJSON(SEARCH_PIN_STATE, PLUGIN_ID_001, event->Par2, log, 0));
-    return return_command_success();
+    return return_command_success_flashstr();
   }
   #else // if FEATURE_SERVO
+  #ifndef BUILD_MINIMAL_OTA
   addLog(LOG_LEVEL_ERROR, F("SERVO : command not included in build"));
+  #endif
   #endif // FEATURE_SERVO
-  return return_command_failed();
+  return return_command_failed_flashstr();
 }

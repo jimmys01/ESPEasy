@@ -5,9 +5,10 @@
 // ############################## Plugin 133 LTR390 I2C UV and Ambient Sensor ############################
 // #######################################################################################################
 
-// Changelog:
-//
-// 2022-03-26 tonhuisman: Initial plugin creation
+/** Changelog:
+ * 2025-01-12 tonhuisman: Add support for MQTT AutoDiscovery
+ * 2022-03-26 tonhuisman: Initial plugin creation
+ */
 
 # define PLUGIN_133
 # define PLUGIN_ID_133         133
@@ -27,18 +28,15 @@ boolean Plugin_133(uint8_t function, struct EventStruct *event, String& string)
   {
     case PLUGIN_DEVICE_ADD:
     {
-      Device[++deviceCount].Number           = PLUGIN_ID_133;
-      Device[deviceCount].Type               = DEVICE_TYPE_I2C;
-      Device[deviceCount].VType              = Sensor_VType::SENSOR_TYPE_QUAD;
-      Device[deviceCount].Ports              = 0;
-      Device[deviceCount].PullUpOption       = false;
-      Device[deviceCount].InverseLogicOption = false;
-      Device[deviceCount].FormulaOption      = true;
-      Device[deviceCount].ValueCount         = 4;
-      Device[deviceCount].SendDataOption     = true;
-      Device[deviceCount].TimerOption        = true;
-      Device[deviceCount].GlobalSyncOption   = true;
-      Device[deviceCount].PluginStats        = true;
+      auto& dev = Device[++deviceCount];
+      dev.Number         = PLUGIN_ID_133;
+      dev.Type           = DEVICE_TYPE_I2C;
+      dev.VType          = Sensor_VType::SENSOR_TYPE_QUAD;
+      dev.FormulaOption  = true;
+      dev.ValueCount     = 4;
+      dev.SendDataOption = true;
+      dev.TimerOption    = true;
+      dev.PluginStats    = true;
       break;
     }
 
@@ -57,11 +55,32 @@ boolean Plugin_133(uint8_t function, struct EventStruct *event, String& string)
       break;
     }
 
+    # if FEATURE_MQTT_DISCOVER
+    case PLUGIN_GET_DISCOVERY_VTYPES:
+    {
+      event->Par1 = static_cast<int>(Sensor_VType::SENSOR_TYPE_UV_ONLY);
+      event->Par2 = static_cast<int>(Sensor_VType::SENSOR_TYPE_UV_INDEX_ONLY);
+      event->Par3 = static_cast<int>(Sensor_VType::SENSOR_TYPE_LUX_ONLY);
+      event->Par4 = static_cast<int>(Sensor_VType::SENSOR_TYPE_LUX_ONLY);
+      success     = true;
+      break;
+    }
+    # endif // if FEATURE_MQTT_DISCOVER
+
     case PLUGIN_I2C_HAS_ADDRESS:
     {
       success = event->Par1 == 0x53;
       break;
     }
+
+    # if FEATURE_I2C_GET_ADDRESS
+    case PLUGIN_I2C_GET_ADDRESS:
+    {
+      event->Par1 = 0x53;
+      success     = true;
+      break;
+    }
+    # endif // if FEATURE_I2C_GET_ADDRESS
 
     case PLUGIN_SET_DEFAULTS:
     {
@@ -90,7 +109,10 @@ boolean Plugin_133(uint8_t function, struct EventStruct *event, String& string)
           static_cast<int>(P133_selectMode_e::UVMode),
           static_cast<int>(P133_selectMode_e::ALSMode)
         };
-        addFormSelector(F("Read mode"), F("p133_selectmode"), 3, selectModeOptions, selectModeValues, P133_SELECT_MODE, true);
+        constexpr size_t optionCount = NR_ELEMENTS(selectModeValues);
+        FormSelectorOptions selector(optionCount, selectModeOptions, selectModeValues);
+        selector.reloadonchange = true;
+        selector.addFormSelector(F("Read mode"), F("mode"), P133_SELECT_MODE);
       }
 
       const __FlashStringHelper *gainOptions[] = { F("1x"), F("3x"), F("6x"), F("9x"), F("18x") };
@@ -101,6 +123,7 @@ boolean Plugin_133(uint8_t function, struct EventStruct *event, String& string)
         LTR390_GAIN_9,
         LTR390_GAIN_18
       };
+      constexpr size_t gainCount = NR_ELEMENTS(gainValues);
 
       const __FlashStringHelper *resolutionOptions[] = {
         F("20 bit"),
@@ -118,18 +141,21 @@ boolean Plugin_133(uint8_t function, struct EventStruct *event, String& string)
         LTR390_RESOLUTION_16BIT,
         LTR390_RESOLUTION_13BIT,
       };
+      constexpr size_t resolutionCount = NR_ELEMENTS(resolutionValues);
+      const FormSelectorOptions selGain(gainCount, gainOptions, gainValues);
+      const FormSelectorOptions selRes(resolutionCount, resolutionOptions, resolutionValues);
 
       if (static_cast<P133_selectMode_e>(P133_SELECT_MODE) != P133_selectMode_e::ALSMode) {
-        addFormSelector(F("UV Gain"),       F("p133_uvgain"),       5, gainOptions,       gainValues,       P133_UVGAIN);
-        addFormSelector(F("UV Resolution"), F("p133_uvresolution"), 6, resolutionOptions, resolutionValues, P133_UVRESOLUTION);
+        selGain.addFormSelector(F("UV Gain"),      F("uvgain"), P133_UVGAIN);
+        selRes.addFormSelector(F("UV Resolution"), F("uvres"),  P133_UVRESOLUTION);
       }
 
       if (static_cast<P133_selectMode_e>(P133_SELECT_MODE) != P133_selectMode_e::UVMode) {
-        addFormSelector(F("Ambient Gain"),       F("p133_alsgain"),       5, gainOptions,       gainValues,       P133_ALSGAIN);
-        addFormSelector(F("Ambient Resolution"), F("p133_alsresolution"), 6, resolutionOptions, resolutionValues, P133_ALSRESOLUTION);
+        selGain.addFormSelector(F("Ambient Gain"),      F("alsgain"), P133_ALSGAIN);
+        selRes.addFormSelector(F("Ambient Resolution"), F("alsres"),  P133_ALSRESOLUTION);
       }
 
-      addFormCheckBox(F("Reset sensor on init"), F("p133_initreset"), P133_INITRESET == 1);
+      addFormCheckBox(F("Reset sensor on init"), F("initreset"), P133_INITRESET == 1);
 
       success = true;
       break;
@@ -138,17 +164,17 @@ boolean Plugin_133(uint8_t function, struct EventStruct *event, String& string)
     case PLUGIN_WEBFORM_SAVE:
     {
       if (static_cast<P133_selectMode_e>(P133_SELECT_MODE) != P133_selectMode_e::ALSMode) {
-        P133_UVGAIN       = getFormItemInt(F("p133_uvgain"));
-        P133_UVRESOLUTION = getFormItemInt(F("p133_uvresolution"));
+        P133_UVGAIN       = getFormItemInt(F("uvgain"));
+        P133_UVRESOLUTION = getFormItemInt(F("uvres"));
       }
 
       if (static_cast<P133_selectMode_e>(P133_SELECT_MODE) != P133_selectMode_e::UVMode) {
-        P133_ALSGAIN       = getFormItemInt(F("p133_alsgain"));
-        P133_ALSRESOLUTION = getFormItemInt(F("p133_alsresolution"));
+        P133_ALSGAIN       = getFormItemInt(F("alsgain"));
+        P133_ALSRESOLUTION = getFormItemInt(F("alsres"));
       }
 
-      P133_SELECT_MODE = getFormItemInt(F("p133_selectmode"));
-      P133_INITRESET   = isFormItemChecked(F("p133_initreset")) ? 1 : 0;
+      P133_SELECT_MODE = getFormItemInt(F("mode"));
+      P133_INITRESET   = isFormItemChecked(F("initreset")) ? 1 : 0;
 
       success = true;
       break;
@@ -164,9 +190,7 @@ boolean Plugin_133(uint8_t function, struct EventStruct *event, String& string)
                                                                                P133_INITRESET == 1));
       P133_data_struct *P133_data = static_cast<P133_data_struct *>(getPluginTaskData(event->TaskIndex));
 
-      if (nullptr != P133_data) {
-        success = P133_data->plugin_init(event);
-      }
+      success = (nullptr != P133_data) && P133_data->plugin_init(event);
       break;
     }
 

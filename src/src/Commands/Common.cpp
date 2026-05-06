@@ -3,12 +3,6 @@
 #include <ctype.h>
 #include <IPAddress.h>
 
-#include "../../ESPEasy_common.h"
-
-#include "../DataStructs/ESPEasy_EventStruct.h"
-#include "../DataTypes/EventValueSource.h"
-
-#include "../ESPEasyCore/ESPEasyWifi.h"
 #include "../ESPEasyCore/Serial.h"
 
 #include "../Helpers/Networking.h"
@@ -17,39 +11,39 @@
 
 
 // Simple function to return "Ok", to avoid flash string duplication in the firmware.
-const __FlashStringHelper * return_command_success()
+const __FlashStringHelper * return_command_success_flashstr() { return F("OK"); }
+const __FlashStringHelper * return_command_failed_flashstr() { return F("Failed"); }
+
+const __FlashStringHelper * return_command_boolean_result_flashstr(bool success) 
 {
-  return F("\nOK");
+    return success ? return_command_success_flashstr() : return_command_failed_flashstr();
 }
 
-const __FlashStringHelper * return_command_failed()
+
+String return_command_success()
 {
-  return F("\nFailed");
+  return return_command_success_flashstr();
 }
 
-String return_command_success_str()
+String return_command_failed()
 {
-  return return_command_success();
+  return return_command_failed_flashstr();
 }
 
-String return_command_failed_str()
-{
-  return return_command_failed();
-}
+const __FlashStringHelper * return_incorrect_nr_arguments() { return F("Too many arguments, try using quotes!"); }
+const __FlashStringHelper * return_incorrect_source() { return F("Command not allowed from this source!"); }
+const __FlashStringHelper * return_not_connected() { return F("Not connected to WiFi"); }
 
-const __FlashStringHelper * return_incorrect_nr_arguments()
+String return_result(struct EventStruct *event,
+                     const __FlashStringHelper * result)
 {
-  return F("Too many arguments, try using quotes!");
-}
+  serialPrintln();
+  serialPrintln(result);
 
-const __FlashStringHelper * return_incorrect_source()
-{
-  return F("Command not allowed from this source!");
-}
-
-const __FlashStringHelper * return_not_connected()
-{
-  return F("Not connected to WiFi");
+  if (event->Source == EventValueSource::Enum::VALUE_SOURCE_SERIAL) {
+    return return_command_success();
+  }
+  return result;
 }
 
 String return_result(struct EventStruct *event, const String& result)
@@ -58,18 +52,19 @@ String return_result(struct EventStruct *event, const String& result)
   serialPrintln(result);
 
   if (event->Source == EventValueSource::Enum::VALUE_SOURCE_SERIAL) {
-    return return_command_success_str();
+    return return_command_success();
   }
   return result;
 }
 
+
 const __FlashStringHelper * return_see_serial(struct EventStruct *event)
 {
-  if (event->Source == EventValueSource::Enum::VALUE_SOURCE_SERIAL) {
-    return return_command_success();
-  }
-  return F("Output sent to serial");
+  return (event->Source == EventValueSource::Enum::VALUE_SOURCE_SERIAL)
+    ? return_command_success_flashstr() 
+    : F("Output sent to serial");
 }
+
 
 String Command_GetORSetIP(struct EventStruct *event,
                           const __FlashStringHelper * targetDescription,
@@ -103,7 +98,7 @@ String Command_GetORSetIP(struct EventStruct *event,
     }
     return return_result(event, result);
   }
-  return return_command_success_str();
+  return return_command_success();
 }
 
 String Command_GetORSetString(struct EventStruct *event,
@@ -136,7 +131,7 @@ String Command_GetORSetString(struct EventStruct *event,
     result += target;
     return return_result(event, result);
   }
-  return return_command_success_str();
+  return return_command_success();
 }
 
 String Command_GetORSetBool(struct EventStruct *event,
@@ -154,21 +149,21 @@ String Command_GetORSetBool(struct EventStruct *event,
       hasArgument = true;
       TmpStr1.toLowerCase();
 
-      int tmp_int = 0;
+      int32_t tmp_int = 0;
       if (validIntFromString(TmpStr1, tmp_int)) {
         *value = tmp_int > 0;
       }
-      else if (strcmp_P(PSTR("on"), TmpStr1.c_str()) == 0) { *value = true; }
-      else if (strcmp_P(PSTR("true"), TmpStr1.c_str()) == 0) { *value = true; }
-      else if (strcmp_P(PSTR("off"), TmpStr1.c_str()) == 0) { *value = false; }
-      else if (strcmp_P(PSTR("false"), TmpStr1.c_str()) == 0) { *value = false; }
+      else if (equals(TmpStr1, F("on"))) { *value = true; }
+      else if (equals(TmpStr1, F("true"))) { *value = true; }
+      else if (equals(TmpStr1, F("off"))) { *value = false; }
+      else if (equals(TmpStr1, F("false"))) { *value = false; }
     }
   }
 
   if (hasArgument) {
     return return_result(event, concat(targetDescription, boolToString(*value)));
   }
-  return return_command_success_str();
+  return return_command_success();
 }
 
 #if FEATURE_ETHERNET
@@ -188,7 +183,7 @@ String Command_GetORSetETH(struct EventStruct *event,
       hasArgument = true;
       TmpStr1.toLowerCase();
 
-      int tmp_int = 0;
+      int32_t tmp_int = 0;
       if (validIntFromString(TmpStr1, tmp_int)) {
         *value = static_cast<uint8_t>(tmp_int);
       }
@@ -197,8 +192,8 @@ String Command_GetORSetETH(struct EventStruct *event,
 
 
       // WiFi/Eth mode
-      else if (TmpStr1.equals(F("wifi"))) { *value = 0; }
-      else if (TmpStr1.equals(F("ethernet"))) { *value = 1; }
+      else if (equals(TmpStr1, F("wifi"))) { *value = 0; }
+      else if (equals(TmpStr1, F("ethernet"))) { *value = 1; }
 
       // ETH clockMode
       else if (TmpStr1.startsWith(F("ext"))) { *value = 0; }
@@ -233,7 +228,7 @@ String Command_GetORSetInt8_t(struct EventStruct *event,
       hasArgument = true;
       TmpStr1.toLowerCase();
 
-      int tmp_int = 0;
+      int32_t tmp_int = 0;
       if (validIntFromString(TmpStr1, tmp_int)) {
         *value = static_cast<int8_t>(tmp_int);
       }
@@ -245,5 +240,35 @@ String Command_GetORSetInt8_t(struct EventStruct *event,
     result += *value;
     return return_result(event, result);
   }
-  return return_command_success_str();
+  return return_command_success();
+}
+
+String Command_GetORSetFloatMinMax(struct EventStruct        *event,
+                                   const __FlashStringHelper *targetDescription,
+                                   const char                *Line,
+                                   float                     *value,
+                                   int                        arg,
+                                   float                      _min,
+                                   float                      _max)
+{
+  {
+    // Check if command is valid. Leave in separate scope to delete the TmpStr1
+    String TmpStr1;
+
+    if (GetArgv(Line, TmpStr1, arg + 1)) {
+      TmpStr1.toLowerCase();
+
+      float tmp_float{};
+
+      if (validFloatFromString(TmpStr1, tmp_float) &&
+          definitelyGreaterThan(tmp_float, _min) &&
+          definitelyLessThan(tmp_float, _max)) {
+        *value = tmp_float;
+      } else {
+        return return_command_failed();
+      }
+    }
+  }
+
+  return return_result(event, concat(targetDescription, toString(*value)));
 }

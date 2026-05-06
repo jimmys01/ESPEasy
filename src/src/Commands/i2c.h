@@ -1,8 +1,13 @@
 #ifndef COMMAND_I2C_H
 #define COMMAND_I2C_H
 
-#include <Arduino.h>
+#include "../../ESPEasy_common.h"
+#if FEATURE_I2C
+void i2c_scanI2Cbus(bool    dbg,
+                    int8_t  channel,
+                    uint8_t i2cBus);
 
-const __FlashStringHelper * Command_i2c_Scanner(struct EventStruct *event, const char* Line);
-
+const __FlashStringHelper* Command_i2c_Scanner(struct EventStruct *event,
+                                               const char         *Line);
+#endif
 #endif // COMMAND_I2C_H

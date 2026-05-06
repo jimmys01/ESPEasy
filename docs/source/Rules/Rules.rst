@@ -1,3 +1,9 @@
+.. _Rules:
+
+.. |br| raw:: html
+
+    <br>
+
 #####
 Rules
 #####
@@ -10,8 +16,9 @@ Rules can be used to create very simple flows to control devices on your ESP.
 
 .. note::
    To assist writing rules, one may prefer to use an editor like Notepad++ which supports user defined languages to colorize the text.
-   See the ``Misc/Notepad++`` folder for a Notepad++ language definition which can be used to colorize rules.
-   Another option is the `ESPeasy Code Editor <https://raw.githack.com/chromoxdor/EasyColorCode/main/colorcode.html>`_ , an online editor with rules highlighting and hinting.
+   See the ``Misc/Notepad++`` folder for a Notepad++ language definition which can be used to colorize rules. |br|
+   Another option is the `ESPeasy Code Editor <https://raw.githack.com/chromoxdor/EasyColorCode/main/colorcode.html>`_ , an online editor with rules highlighting and hinting. |br|
+   Additionally, in many builds, EasyColorCode has been integrated, making the syntax highlighting and auto-completion available, directly in the Rules editor of the ESPEasy UI.
 
 Enable Rules
 ------------
@@ -85,7 +92,7 @@ Special Notations
 .. note::
  Formulas used in tasks (thus not using the rules) may refer to ``%value%`` for the new current value and ``%pvalue%`` for the previous value before ``PLUGIN_READ`` was called.
  These notations cannot be used in the rules.
- If a previous value is needed, one has to use variables for it.
+ If a previous value in rules is needed, one has to use variables for it.
 
 
 Dot Notation
@@ -231,7 +238,7 @@ As of mega-201803.. we have the possibility to use AND/OR:
    endon
    
    on test3 do
-     if [test#a]=1 and [test#b]=1 or [test#c]=0
+     if [test#a]=1 and [test#b]=1 or [test#c]=0 // (NB: This should have a pair of round braces in the condition...)
       event,ok
      else
       event,not_ok
@@ -249,6 +256,26 @@ As of mega-201803.. we have the possibility to use AND/OR:
 Up to two AND/OR can be used per if statement, that means that you can test
 three float values and if the statement is true/false corresponding action will take place.
 
+String comparisons
+------------------
+
+Added: 2025-05-25
+
+Support for string variables also supports the use of string comparisons with the ``if`` statement. String comparisons are **case-sensitive**, so if non-case-sensitive comparisons are needed, using ``[str#<var>#V#l]`` will output the content in lower-case (without changing the stored content).
+
+.. code-block:: none
+
+  on zigbee2mqtt/eria_dimswitch_1#action do
+    LetStr,onoff,[zigbee2mqtt/eria_dimswitch_1#action]
+    if [str#onoff#V#l]=on
+      gpio,12,1 // on
+    else
+      gpio,12,0 // off
+    endif
+  endon
+
+(Example adapted from :ref:`P037_page`)
+
 Trigger
 -------
 
@@ -265,7 +292,7 @@ The trigger can be an device value being changed:
 Operator (inequality function)
 ------------------------------
 
-Or a inequality function:
+Or an inequality function:
 
 .. code-block:: none
 
@@ -411,9 +438,46 @@ Its value can be referenced like this: ``[bme280#temperature]``.
 This can be used in some plugins like the "OLED Framed" plugin to populate some lines on the display.
 It can also be used in rules. Every occurance of this text will then be replaced by its value.
 
+When having a rule to handle the value of a task, like this:
+
+.. code-block:: none
+
+  on bme#temperature do
+    // do something
+  endon
+
+it is strongly advised to use ``%eventvalue1%`` instead of ``[bme#temperature]``, as the exact value at *the moment that the event was generated* is used, instead of the, possibly already changed value in the task (that *will* be handled in a next generated event).
+
+Similarly, when enabling the **Single event with all values:** option, there are all values available for the task provided to the event as ``%eventvalue1%`` to ``%eventvalue4%`` (actual number of values depending on the Values available at the plugin).
+
+.. code-block:: none
+
+  on bme#all do
+    // Use %eventvalue1% .. %eventvalue3% for Temperature, Humidity and Pressure
+  endon
 
 N.B. these references to task values only yield a value when the task is enabled and its value is valid.
 
+TaskValue Attributes
+--------------------
+
+Added: 2025/06/12
+
+When included in the build, a few attributes per TaskValue can be retrieved. The syntax uses the familiar dot-notation, as shown above: ``[<taskname>#<valuename>.<attribute>]``.
+
+The available attributes are:
+
+* ``decimals``: The number of decimals set.
+
+* ``hasFormula``: If a formula is set, will result in a ``1``, or a ``0`` when the Formula field is empty.
+
+* ``statsEnabled``: If the Stats checkbox is checked returns ``1`` and ``0`` when not checked. Only available if the Plugin Statistics feature is available in the build.
+
+* ``uom``: The Unit of Measure that's configured. Only available when Unit of Measure feature is included in the build.
+
+These values are available independent of the Enabled state of the task.
+
+|
 
 Event name (%eventname% or %eventpar%)
 --------------------------------------
@@ -474,7 +538,7 @@ the '=' sign).
 For historic reasons, ``%eventvalue%`` without a number, can also be used to access the first event value.
 Thus it will be the same when using ``%eventvalue1%``.
 
-There is one exception; When the event starts with an ``!``,  ``%eventvalue%`` does refer to the literal event, or the part of the event after the ``#`` character.
+There is one exception; When the event starts with an ``!``,  ``%eventvalue%`` does refer to the literal event, an with ``%eventname%`` and ``%eventpar%`` the part left and right of the ``#`` character can be used (processing ``%eventname%`` and ``%eventpar%`` was added 2025-03-30).
 This was introduced for the Serial Server plugin (P020) which sends events like ``!Serial#`` followed by the received string.
 
 
@@ -579,7 +643,7 @@ Sample rules section:
 .. code-block:: none
 
  on remoteTimerControl do
-   timerSet,1,%eventvalue%
+   timerSet,1,%eventvalue1%
  endon
 
 Now send this command to the ESP:
@@ -694,54 +758,122 @@ A really great feature to use is the internal variables. You set them like this:
 
  Let,<n>,<value>
 
-Where n must be a positive integer (type ``uint32_t``) and the value a floating point value. To use the values in strings you can
-either use the ``%v7%`` syntax or ``[var#7]``. BUT for formulas you need to use the square
-brackets in order for it to compute, i.e. ``[var#12]``.
+ Let,1,15
 
-.. note: The number for ``n`` used to be limited to 1 ... 16, but this limit has been removed in builds made after 2021-01-09.
+ Let,border,3
+
+ Let,angle,0.436
+
+Where n can be a positive integer (type ``uint32_t``), or a name (identifier), and the value a floating point value. To use the values in strings you can
+either use the ``%v7%`` syntax or ``[var#7]``, or when using named variables: ``%v_border%`` or ``[var#border]``.
+
+Added: 2025-03-31: Support for named variables.
+
+.. note:: The number for ``n`` used to be limited to 1 ... 16, but this limit has been removed in builds made after 2021-01-09.
+
+.. note:: Variables used to be limited to numbers, but named variables can now also be used in builds made after 2025-03-31.
+
+When using named variables, these names should consist of only alphanumeric characters and underscores, a name using spaces, punctuation characters, braces, etc., will be rejected.
 
 If you need to make sure the stored value is an integer value, use the ``[int#n]`` syntax. (i.e. ``[int#12]``)
-The index ``n`` is shared among ``[var#n]`` and ``[int#n]``.
+The index ``n``, or named variable, is shared among ``[var#n]`` and ``[int#n]``, as well as when using the ``%vN%`` or ``%v_N%`` syntax, that will return the same value as when using the ``[var#N]`` notation.
 
-On the "System Variables" page of the web interface all set values can be inspected including their values.
+When using a named variable with the short-hand notation, an underscore must be used after the ``%v`` lead-in, so ``%v_border%``, ``%v1%`` and ``%v_1%`` are valid, but ``%vborder%`` is **invalid**.
+
+The short-hand notation (e.g. ``%v7%``) will be processed first.
+Meaning this can be used to switch sets of variables by nesting like this: ``[int#%v7%]``.
+
+On the "System Variables" page of the web interface all set values can be inspected including their values. Named variables will be listed in lowercase, and the variable names are not case-sensitive, just like task- and value-names.
 If none is set, "No variables set" will be shown.
 
-If a specific system variable was never set (using the ``Let`` command), its value will be considered to be ``0.0``.
+If a specific system variable was never set (using the ``Let``, ``Inc`` or ``Dec`` commands), its value will be considered to be ``0.0``.
 
-.. note: Interval variables are lost after a reboot. If you need to keep values that will survive a reboot or crash (without loosing power), please use a dummy task for this.
+.. note:: Internal variables are lost after a reboot. If you need to keep values that will survive a reboot or crash (without losing power), please use a dummy task for this.
 
+
+Added: 2023-12-01
+
+Short-hand notation can be nested like this: ``[int#%v%v7%%]`` or use simple calculations like this: ``[int#%v=7+%v100%%]``
+This allows to simply switch a number of variable offsets in rules by only changing 1 variable.
+
+String variables
+----------------
+
+Added: 2025-05-25: Support for String variables. (ESP32 builds only, because of memory restictions on ESP8266 platform)
+
+To store string/text data in internal variables, a new command ``LetStr,<varname>,<value>`` has been introduced. These variables are stored independent from the numeric values that are stored with the ``Let`` command.
+
+For using the content of a string variable, ``[str#<var>]`` should be used. This form also supports formatting and justification options, described below.
+
+If the value contains spaces or commas, the ``<value>`` must be wrapped in quotes to store all data. String concatenation can be achieved by assigning the value to the same variable, like ``LetStr,test,"[str#test] extra text containing spaces appended to variable 'test'"``. The space before ``extra`` is *also* included in the new content.
+
+A string variable that was not set to any value is assumed to hold the pseudo-value of an empty string.
+
+For determining the length of the current content of a string variable, ``[length#<varname>]`` can be used. Formatting and justification can be applied if desired.
+
+
+
+Task-specific settings
+----------------------
+
+(Added 2022-12-17)
+
+For retrieving some generic task-specific settings, below variables have been added. They can be formatted using the :ref:`Formatting referred values <Formatting values>` options.
+
+``[<TaskName>#settings.enabled]`` to get the enabled/disabled state (1/0) for a specific task (by name only)
+
+``[<TaskName>#settings.interval]`` to get the Interval setting for the named task. Possible range = 0..65535.
+
+``[<TaskName>#settings.valuecount]`` to get the number of values, available in the named task. Range: 0..4. For tasks with a configurable number of values, like the SysInfo plugin, it will return the *currently* set number of values.
+
+``[<TaskName>#settings.controllerN.enabled]`` to get the enabled/disabled state (1/0) for controller N (1..3) of the named task. The controller has to be enabled too, to return an enabled state!
+
+``[<TaskName>#settings.controllerN.idx]`` to get the Idx value for controller N (1..3) of the named task, when supported by that Controller. The controller has to be enabled too, to return an idx!
+
+These settings will be returned independent of the task being enabled or disabled, as that state can be retrieved separately.
 
 
 Special task names
 ------------------
 
-You must not use the task names ``Plugin``, ``var`` ``int`` as these have special meaning.
+You must not use the task names ``Plugin``, ``var`` or ``int`` as these have special meaning.
 
 ``Plugin`` can be used in a so called ``PLUGIN_REQUEST``, for example: 
+
 ``[Plugin#GPIO#Pinstate#N]`` to get the pin state of a GPIO pin.
 
 ``[Plugin#MCP#Pinstate#N]`` to get the pin state of a MCP pin.
 
 ``[Plugin#PCF#Pinstate#N]`` to get the pin state of a PCF pin.
 
+Since 2022-12-27: (Enabled for all builds with flash size > 1MB)
+
+- For GPIO, MCP or PCF pins set to PWM or SERVO output, the last set duty-cycle is returned instead of the current pin state (as the state was of no use).
+
+- For any plugin that registers the used pin(s), the last set pin state can be retrieved, either regular pin state or PWM state, by using this syntax: ``[Plugin#<pluginId>#Pinstate#N]``. Some plugins that use pin registration are 59 (:ref:`p059_page`), 22 (:ref:`p022_page`), 11 (:ref:`p011_page`) and 63 (:ref:`p063_page`)
+
+
 For expanders you can use also the following:
 
-``[Plugin#MCP#PinRange#x-y]`` to get the pin state of a range of MCP pins from x o y.
+``[Plugin#MCP#PinRange#x-y]`` to get the pin state of a range of MCP pins from x to y.
 
-``[Plugin#PCF#PinRange#x-y]`` to get the pin state of a range of PCF pins from x o y.
+``[Plugin#PCF#PinRange#x-y]`` to get the pin state of a range of PCF pins from x to y.
 
 ``Var`` and ``int`` are used for internal variables. 
 The variables set with the ``Let`` command will be available in rules
-as ``var#N`` or ``int#N`` where ``N`` is 1..16.
-For example: ``Let,10,[var#9]``
+as ``var#N`` or ``int#N`` where ``N`` is alphanumeric.
+For example: ``Let,10,[var#9]`` or ``Let,bottom,[var#top]-25``
+
+Variables also can be retrieved by using the short-hand notation ``%vN%`` for numeric variable names, or ``%v_varname%`` for alphanumeric and numeric variable names. The short-hand variables are processed before the ``[var#N]`` etc. variable references, to enable dynamic/indirect handling of variables, like lookup tables. These can be addressed like: ``[var#%v_index%]``.
 
 N.B. ``int`` and ``var`` use the same variable, only ``int`` does round them to 0 decimals.
+
 N.B.2  ``int`` is added in build 20190916.
 
 ``Clock``, ``Rules`` and ``System`` etc. are not recommended either since they are used in
 event names.
 
-Please observe that task names are case insensitive meaning that VAR, var, and Var etc.
+Please observe that task names are case insensitive, meaning that VAR, var, and Var etc.
 are all treated the same.
 
 
@@ -767,7 +899,7 @@ In order to allow the comma or space in a parameter, you can wrap the parameter 
 
 * Single quote (')
 * Double quote (")
-* Back quote  (added to builds after 2019/11/10)
+* Back quote (\`) (added to builds after 2019/11/10)
 
 There are multiple quotes available for this, to be able to use "the other quote" in your parameter.
 For example in JSON, you need the double quote for string like values or keys.
@@ -788,10 +920,10 @@ N.B. these extra quotes are removed from the parameter when used, as well as tra
 The reason this behavior was changed from before 2019/11 was that the old implementation could lead to unpredictable results.
 
 
-Formatting refered values
--------------------------
-
 .. _Formatting values:
+
+Formatting referred values
+--------------------------
 
 When referring another value, some basic formatting can be used.
 
@@ -800,11 +932,11 @@ Referring a value using some pre-defined format: ``[TaskName#ValueName#transform
 Transformation
 ^^^^^^^^^^^^^^
 
-* Transformations are case sensitive. (``M`` differs from ``m``, capital is more verbose)
+* Transformations are case sensitive. (``M`` differs from ``m``, capital is more verbose).
 * Transformations can not be used on "Plugin" calls, like ``[Plugin#GPIO#Pinstate#N]``, since these already use multiple occurences of ``#``.
-* Most transformations work on "binary" values (logic values 0 or 1)
+* Most transformations work on "binary" values (logic values 0 or 1).
 * A "binary" transformation can be "inverted" by adding a leading ``!``.
-* A "binary" value is considered 0 when its string value is "0" or empty, otherwise it is an 1. (float values are rounded)
+* A "binary" value is considered 0 when its string value is "0" or empty, otherwise it is an 1. (float values are rounded).
 * A "binary" value can also be used to detect presence of a string, as it is 0 on an empty string or 1 otherwise.
 * If the transformation contains ``R``, under certain circumstances, the value will be right-aligned.
 
@@ -821,7 +953,7 @@ Binary transformations:
 * ``O``: 0 => "OFF" 1 => " ON"
 * ``U``: 0 => "DOWN" 1 => "  UP"
 * ``u``: 0 => "D" 1 => "U"
-* ``V``: value = value without transformations
+* ``V``: value => value without transformations.
 * ``X``: 0 => "O" 1 => "X"
 * ``Y``: 0 => " NO" 1 => "YES"
 * ``y``: 0 => "N" 1 => "Y"
@@ -829,12 +961,12 @@ Binary transformations:
 
 Floating point transformations:
 
-* ``Dx.y``: Minimal 'x' digits zero filled & 'y' decimal fixed digits. E.g. ``[bme#T#D2.1]``
-* ``Dx``: Minimal 'x' digits zero filled in front of the decimal point, no decimal digits. Same as ``Dx.0``
-* ``D.y``: Same as ``D0.y``
-* ``d``: Same as ``D`` but spaces insted zeros
-* ``F``: Floor (round down)
-* ``E``: cEiling (round up)
+* ``Dx.y``: Minimal 'x' digits zero filled & 'y' decimal fixed digits. E.g. ``[bme#T#D2.1]`` -> value 5.2 will be output as ``05.2``
+* ``Dx``: Minimal 'x' digits zero filled in front of the decimal point, no decimal digits. Same as ``Dx.0``.
+* ``D.y``: Same as ``D0.y``.
+* ``d``: Same as ``D`` transformation but using spaces instead of zeroes.
+* ``F``: Floor (round down).
+* ``E``: cEiling (round up).
 
 Other transformations:
 
@@ -855,6 +987,8 @@ To apply a justification, a transformation must also be used. If no transformati
 * ``u``: Uppercase entire value.
 * ``l``: Lowercase entire value.
 
+NB. The numeric arguments for formatting and justification can also be provided via a short-hand variable, like ``[bme#temperature#d%v_dig%.1]`` where the number of digits is set in variable ``dig`` via ``let,dig,3``.
+
 
 String Formatting and Interpreting
 ----------------------------------
@@ -869,28 +1003,32 @@ This helps recognize task values (``[taskname#varname]``) in these commands.
 Substring
 ^^^^^^^^^
 
-It is possible to process sub strings, for example when working with ``%eventvalue%`` in rules.
+It is possible to process sub strings, for example when working with ``%eventvalue1%`` in rules.
 
 Usage: ``{substring:<startpos>:<endpos>:<string>}``
 
 The position arguments are the same as in Arduino ``String::substring`` , meaning the endpos is 1 position further than the last character you need.
 
+Added: 2025-03-31
+
+If ``<endpos>`` is not provided or invalid (the colon has to stay included!), the remainder of ``<string>`` beginning at ``<startpos>`` is returned (like Arduino behavior).
+
 For example:
 
 .. code-block:: none
  
- on DS-1#Temperature do
-   logentry,{substring:0:1:%eventvalue%}
-   logentry,{substring:1:2:%eventvalue%}
-   logentry,{substring:2:3:%eventvalue%}
+ on DS_1#Temperature do
+   logentry,{substring:0:1:%eventvalue1%}
+   logentry,{substring:1:2:%eventvalue1%}
+   logentry,{substring:2:3:%eventvalue1%}
  endon
 
-The ``%eventvalue%`` may contain the value "23.06"
+The ``%eventvalue1%`` may contain the value "23.06"
 The output in the log will then be:
 
 .. code-block:: none
 
- 1512372 : Info  : EVENT: DS-1#Temperature=23.06
+ 1512372 : Info  : EVENT: DS_1#Temperature=23.06
  1512404 : Info  : ACT  : logentry,2
  1512405 : Info  : Command: logentry
  1512406 : Info  : 2
@@ -902,19 +1040,17 @@ The output in the log will then be:
  1512415 : Info  : .
 
 
-N.B. it is also possible to concatenate these and refer to ``{taskname#varname}``.
-
-For example (bit useless example, just for illustrative purposes): 
+For example (bit useless though, just for illustrative purposes):
 
 .. code-block:: none
 
- on DS-1#Temperature do
-   logentry,{substring:0:2:{strtol:16:{substring:0:2:[DS-1#Temperature]}{substring:3:5:[DS-1#Temperature]}}}
+ on DS_1#Temperature do
+   logentry,{substring:0:2:{strtol:16:{substring:0:2:%eventvalue1%}{substring:3:5:%eventvalue1%}}}
  endon
 
 .. code-block:: none
 
- 221313 : Info  : EVENT: DS-1#Temperature=22.13
+ 221313 : Info  : EVENT: DS_1#Temperature=22.13
  221346 : Info  : parse_string_commands cmd: substring:0:2:22.13 -> 22
  221347 : Info  : parse_string_commands cmd: substring:3:5:22.13 -> 13
  221348 : Info  : parse_string_commands cmd: strtol:16:2213 -> 8723
@@ -922,6 +1058,97 @@ For example (bit useless example, just for illustrative purposes):
  221350 : Info  : ACT  : logentry,87
  221351 : Info  : Command: logentry
  221353 : Info  : 87
+
+Translate the current day to a localized (German) 3 character abbreviation: (using named variables)
+
+.. code-block:: none
+
+  Let,idx,(%sysweekday%-1)*3 // 3 characters per value
+  Let,idx3,%v_idx%+3         // 3 characters to display
+  [DSPLeft].7dtext,{substring:%v_idx%:%v_idx3%:SONMONDIEMITDONFRESAM}~%syshour_0%.%sysmin_0%
+
+Or using 2-character Dutch abbreviations:
+
+.. code-block:: none
+
+  Let,idx,(%sysweekday%-1)*2 // 2 characters per value
+  Let,idx2,%v_idx%+2         // 2 characters to display
+  [DSPLeft].7dtext,{substring:%v_idx%:%v_idx2%:"ZOMADIWODOVRZA"}~%syshour_0%.%sysmin_0%
+
+Translate the current month to a Polish 3 character abbreviation, format DD MMM YY :
+
+.. code-block:: none
+
+  Let,idx,(%sysmonth%-1)*3 // 3 characters per value
+  Let,idx3,%v_idx%+3       // 3 characters to display
+  [DSPLeft].7dtext,%sysday_0%~{substring:%v_idx%:%v_idx3%:STYLUTMARKWIMAJCZELIPSIEWRZPAZLISGRU}~%sysyears%
+
+NB: Using all uppercase here as that shows most readable on a 7-segment display, for other purposes, CamelCase/lowercase can of course be used.
+
+Lookup
+^^^^^^
+
+(Added: 2025/05/29, only available when String Variables feature is included in the build)
+
+With ``lookup`` you can look up a substring value, based on an index and a length, from a longer string, somewhat similar to ``substring``.
+
+Usage: ``{lookup:<index>:<length>:<string_with_lookup_values>}``
+
+``<index>``: The positive 0-based index value. If the index indicates a value out of range, the entire calculation is returned unaltered.
+
+``<length>``: The length of the value to retrieve. This implies that all values to lookup are required to have the same length. Shorter lookup values should be padded with spaces or another character to that length.
+
+``<string_with_lookup_values>``: The combined string with all lookup values padded to have the same length, f.e. ``"Off.Fan HeatCool"``, where all lookup values are of length 4. The index to retrieve the word ``Off.`` is 0, ``Fan`` (including a space) is index 1, etc. This string should be wrapped in quotes if it contains space or colon ``:`` character(s).
+
+IndexOf and IndexOf_ci
+^^^^^^^^^^^^^^^^^^^^^^
+
+Determining the position of a substring in a string, using the Arduino ``indexOf()`` function.
+
+Usage:
+
+* ``{indexof:<substring>:<string_to_search_in>[:<offset>]}``  Determine the position of ``substring`` within ``string_to_search_in``, starting from the optional 0-based ``offset``, 0-based result, -1 if not found.
+* ``{indexof_ci:<substring>:<string_to_search_in>[:<offset>]}``  Determine the position of ``substring`` within ``string_to_search_in``, starting from the optional 0-based ``offset``, 0-based result, -1 if not found. This command ignores the character case.
+
+String values containing spaces or commas have to be wrapped in quotes.
+
+Example:
+
+.. code-block:: none
+
+  on HandleCommands#* do // syntax: event,handleCommands#run=parameters
+    if {indexof_ci:run:%eventpar%}=0 // command starts with 'run'
+      LogEntry,'Running command: %eventpar% with arguments: %eventvalue0%'
+      if {indexof:Admin:%eventpar%:3}=3 // command is 'runAdmin', demonstrating the use of an offset, and case-sensitive
+        LogEntry,'Run command as Admin: %eventpar% with arguments: %eventvalue0%'
+      endif
+    endif
+  endon
+
+Equals and Equals_ci
+^^^^^^^^^^^^^^^^^^^^
+
+Compare 2 string values to determine equality, optionally case-insensitive.
+
+Usage:
+
+* ``{equals:<string1>:<string2>``  Compare ``string1`` and ``string2`` for equality, returns 1 for equal and 0 for inequal.
+* ``{equals_ci:<string1>:<string2>``  Compare ``string1`` and ``string2`` for equality, returns 1 for equal and 0 for inequal. Ignore character case.
+
+String values containing spaces or commas have to be wrapped in quotes.
+
+Example:
+
+.. code-block:: none
+
+  on HandleCommands#* do // syntax: event,handleCommands#start=parameters or event,handleCommands#stop=parameters
+    if {equals_ci:start:%eventpar%}=1 and {equals:GO:`%eventvalue1%`} // command is 'start=GO' (eventvalue1 can contain spaces or commas, so quoted using back-ticks)
+      LogEntry,'Starting with arguments: %eventvalue0%'
+    elseif {equals_ci:stop:%eventpar%}=1 // command is 'stop', not case-sensitive
+      LogEntry,'Stopping with arguments: %eventvalue0%'
+    endif
+  endon
+
 
 strtol
 ^^^^^^
@@ -937,14 +1164,14 @@ Example of extracting sub strings from a value and interpreting as if they were 
 
 .. code-block:: none
 
- on DS-1#Temperature do
-   logentry,{strtol:16:%eventvalue%}
-   logentry,{strtol:16:{substring:3:5:%eventvalue%}}
+ on DS_1#Temperature do
+   logentry,{strtol:16:%eventvalue1%}
+   logentry,{strtol:16:{substring:3:5:%eventvalue1%}}
  endon
 
 .. code-block:: none
 
- 1987550 : Info  : EVENT: DS-1#Temperature=24.12
+ 1987550 : Info  : EVENT: DS_1#Temperature=24.12
  1987586 : Info  : ACT  : logentry,36
  1987587 : Info  : Command: logentry
  1987588 : Info  : 36
@@ -963,9 +1190,13 @@ Example use case:
 As a use case, imagine the output of ser2net (P020) from an OpenTherm gateway.
 
 * Message coming from the serial interface: **T101813C0**
+
   * The B denotes that the message is from the
-  * The next 4 bytes (actually 2bytes hex encoded) denote the status and type of the message.
-  * the last 4 bytes (actually 2bytes hex encoded) denote the payload.
+
+  * The next 4 characters (actually 2bytes hex encoded) denote the status and type of the message.
+
+  * the last 4 characters (actually 2bytes hex encoded) denote the payload.
+
 * Message that ends up in rules when using ser2net (P020) and Generic handling: ``!Serial#BT101813C0``
 
 The room temperature in this sample is 19.75 C
@@ -1030,9 +1261,10 @@ Convert an integer value into a binary or hexadecimal representation.
 Usage: 
 
 * ``{toBin:<value>}`` Convert the number into binary representation.
-* ``{toHex:<value>}`` Convert the number into hexadecimal representation.
+* ``{toHex:<value>[:<minHexDigits>]}`` Convert the number into hexadecimal representation.
 
 * ``<value>`` The number to convert, if it is representing a valid unsigned integer value.
+* ``<minHexDigits>`` Optional. The minimal number to digits to output the hex value in
 
 
 For example:
@@ -1043,7 +1275,7 @@ For example:
    let,1,%eventvalue1%
    let,2,{bitset:9:%eventvalue1%}
    LogEntry,'Values {tobin:[int#1]} {tohex:[int#1]}'
-   LogEntry,'Values {tobin:[int#2]} {tohex:[int#2]}'
+   LogEntry,'Values {tobin:[int#2]} {tohex:[int#2]:4}'
  endon
 
 
@@ -1055,8 +1287,29 @@ For example:
  320603: ACT : let,2,635
  320612: ACT : LogEntry,'Values 1111011 7b'
  320618: Values 1111011 7b
- 320631: ACT : LogEntry,'Values 1001111011 27b'
- 320635: Values 1001111011 27b
+ 320631: ACT : LogEntry,'Values 1001111011 027b'
+ 320635: Values 1001111011 027b
+
+.. code-block:: none
+
+ // The same example, but using alphanumeric variable names (and slightly different LogEntry formatting):
+ on myevent do
+   let,first,%eventvalue1%
+   let,bit9on,{bitset:9:%eventvalue1%}
+   LogEntry,'Values 0b{tobin:[int#first]} 0x{tohex:[int#first]}'
+   LogEntry,'Values 0b{tobin:[int#bit9on]} 0x{tohex:[int#bit9on]:4}'
+ endon
+
+.. code-block:: none
+
+ 320528: HTTP: Event,eventname=123
+ 320586: EVENT: eventname=123
+ 320594: ACT : let,first,123
+ 320603: ACT : let,bit9on,635
+ 320612: ACT : LogEntry,'Values 0b1111011 0x7b'
+ 320618: Values 1111011 7b
+ 320631: ACT : LogEntry,'Values 0b1001111011 0x027b'
+ 320635: Values 1001111011 027b
 
 ord
 ^^^
@@ -1069,15 +1322,15 @@ For example:
 
 .. code-block:: none
 
- on DS-1#Temperature do
+ on DS_1#Temperature do
    logentry,{ord:A}   // ASCII value of 'A'
-   logentry,{ord:{substring:2:3:%eventvalue%}}  // ASCII value of 3rd character of %eventvalue%
+   logentry,{ord:{substring:2:3:%eventvalue1%}}  // ASCII value of 3rd character of %eventvalue1%
  endon
 
 
 .. code-block:: none
 
- 2982455 : Info  : EVENT: DS-1#Temperature=23.12
+ 2982455 : Info  : EVENT: DS_1#Temperature=23.12
  2982487 : Info  : ACT  : logentry,65
  2982488 : Info  : Command: logentry
  2982489 : Info  : 65
@@ -1296,6 +1549,25 @@ With:
 * ``<low>`` Lower end of range, if it is representing a valid numerical value.
 * ``<high>`` Higher end of range, if it is representing a valid numerical value.
 
+crc8/crc32
+^^^^^^^^^^
+
+(Added: 2025-04-15)
+
+Calculates the crc8 / crc32 for a range of bytes provided in hex format, and optionally compares it to an expected checksum.
+
+Usage: ``{crc8:<hex_bytes_range>[:<expected_crc>]}`` or ``{crc32:<hex_bytes_range>[:<expected_crc>]}``
+
+With:
+
+* ``<hex_bytes_range>`` Text and/or hex byte(s) (having 0x prefix) that will be converted to bytes and a crc calculated from. If spaces, commas, colons etc. are to be used, the bytes range should be quoted.
+* ``<expected_crc>`` An optional expected-crc value. When provided, it is compared with the calculated crc, and the function will return ``1`` if the values are equal, else ``0`` is returned.
+
+Result:
+
+* ``crc8``: 8-bit checksum or 1 if the calculated crc equals the expected crc, 0 when it doesn't match.
+* ``crc32``: 32-bit checksum or 1 if the calculated crc equals the expected crc, 0 when it doesn't match.
+
 Math Functions
 --------------
 
@@ -1313,6 +1585,13 @@ Basic Math Functions
 * ``sqrt(x)`` Square root of x. (x^0.5)
 * ``sq(x)`` Square of x, x^2.
 * ``round(x)`` Rounds to the nearest integer, but rounds halfway cases away from zero (instead of to the nearest even integer). 
+* ``^`` The caret is used as the exponentiation operator for calculating the value of x to the power of y (x\ :sup:`y`). 
+
+* ``map(value:fromLow:fromHigh:toLow:toHigh)`` Maps ``value`` in the fromLow/fromHigh range to toLow/toHigh values. Similar to the Arduino map() function. See examples below. (Using a colon as an argument separator to not interfere with regular argument processing)
+* ``mapc(value:fromLow:fromHigh:toLow:toHigh)`` same as map, but constrains the result to the fromLow/fromHigh range.
+
+* ``fmod(x:y)`` Like the modulo operator ``%`` that returns an integer remainder, ``fmod`` returns the floating-point remainder of the division ``x / y``. Added: 2025-12-13 (Not available in limited builds)
+
 
 Rules example:
 
@@ -1323,9 +1602,11 @@ Rules example:
    let,2,sqrt([var#1])
    let,3,=log(%eventvalue2%)
    let,4,ln(%eventvalue2%)
+   let,5,%eventvalue1%^%eventvalue2%
    LogEntry,'sqrt of [var#1] = [var#2]'
    LogEntry,'log of %eventvalue2% = [var#3]'
    LogEntry,'ln of %eventvalue2% = [var#4]'   
+   LogEntry,'pow of %eventvalue1%^%eventvalue2% = [var#5]' 
  endon
 
 Called with event ``eventname2=1.234,100``
@@ -1343,7 +1624,29 @@ Called with event ``eventname2=1.234,100``
  213361 : Info   : log of 100 = 2
  213369 : Info   : ACT  : LogEntry,'ln of 100 = 4.60517018598809'
  213374 : Info   : ln of 100 = 4.60517018598809
+ 213379 : Info   : ACT : LogEntry,'pow of 1.234^100 = 1353679866.79107'
+ 213382 : Info   : pow of 1.234^100 = 1353679866.79107
 
+Examples using the ``map()`` & ``mapc()`` function. ``map()`` without the "c" does not constrain the values within the given range, but uses extrapolation when the input value goes outside the ``fromLow`` / ``fromHigh`` range.
+
+Missing values for the map function default to 0.
+
+.. code-block:: none
+
+ on ds1#temp do
+   let,1,%eventvalue1|20% // use default of 20 degrees
+   let,2,map(%v2%:-10:40:1:60) // Convert a temperature range -10..40 to a 60 pixel LED stripe
+   NeoPixelLine,1,%v2%,255,255,255 // Draw a white line on the LED strip
+ endon
+
+.. code-block:: none
+
+ on eventname3 do
+   let,1,map(%eventvalue1|10%:0:100:100:0) // Reverse mapping of a value, 0..100 will output 100..0
+   let,2,mapc(%eventvalue1|10%:0:100:100:0)
+   LogEntry,'Input value %eventvalue1|10% mapped to: %v1%'
+   LogEntry,'Input value %eventvalue1|10% mapped to: %v2% and constrained'
+ endon
 
 
 Trigonometric Functions
@@ -1361,6 +1664,7 @@ Radian Angle:
 * ``aSin(x)`` Arc Sine of x (radian)
 * ``aCos(x)`` Arc Cosine of x (radian)
 * ``aTan(x)`` Arc Tangent of x (radian)
+* ``aTan2(x:y)`` Arc Tangent of x / y (radian) Added: 2025-12-13
 
 Degree Angle:
 
@@ -1370,6 +1674,7 @@ Degree Angle:
 * ``aSin_d(x)`` Arc Sine of x (degree)
 * ``aCos_d(x)`` Arc Cosine of x (degree)
 * ``aTan_d(x)`` Arc Tangent of x (degree)
+* ``aTan2_d(x:y)`` Arc Tangent of x / y (degree) Added: 2025-12-13
 
 
 
@@ -1380,7 +1685,7 @@ System variables
 There is a large number of system variables.
 These do not refer to task values, but to typical system variables like system uptime, current time and date, etc.
 
-These can all be seen on the ``<ip-address>/sysvars`` page.
+These can all be seen on the ``<ip-address>/sysvars`` page. (Tools/System Variables)
 
 N.B. These values cannot be formatted like the task value references.
 
@@ -1424,7 +1729,7 @@ Just create Generic - Dummy Device and variables inside it.
 
 Alternatively, TASKname and/or VARname can be used instead of TASKnr and VARnr:
 
- .. code-block:: html
+.. code-block:: none
 
  TaskValueSet,TASKname,VARname,Value
  TaskValueSet,TASKnr,VARname,Value
@@ -1524,11 +1829,11 @@ A **10 value average**:
    Let,4,[VAR#3]
    Let,3,[VAR#2]
    Let,2,[VAR#1]
-   Let,1,[Temp#Value]
+   Let,1,%eventvalue1%
    TaskValueSet,12,1,([VAR#1]+[VAR#2]+[VAR#3]+[VAR#4]+[VAR#5]+[VAR#6]+[VAR#7]+[VAR#8]+[VAR#9]+[VAR#10])/10
   EndOn
 
-In the above example we use the sensor value of ``Temp#Value`` to get the trigger event,
+In the above example we use the sensor value of ``Temp#Value`` (available via ``%eventvalue1%``) to get the trigger event,
 we then add all the previous 9 values to the internal variables and the newly acquired
 value to the first variable. We then summarize them and divide them by 10 and store it
 as a dummy variable (example is on task 12, value 1) which we use to publish the sliding
@@ -1540,7 +1845,7 @@ Another filter could be to just use the previous value and **dilute** the new va
 
   On Temp#Value Do
     Let,2,[VAR#1]
-    Let,1,[Temp#Value]
+    Let,1,%eventvalue1%
     TaskValueSet,12,1,(3*[VAR#1]+[VAR#2])/4
   EndOn
 
@@ -1550,7 +1855,7 @@ Yet another filter could be to add the new value to a **summarized average**:
 .. code-block:: none
 
   On Temp#Value Do
-    Let,1,[Temp#Value]
+    Let,1,%eventvalue1%
     TaskValueSet,12,1,([VAR#1]+3*[VAR#2])/4
     Let,2,[Dummy#Value]
   EndOn
@@ -1565,20 +1870,20 @@ PIR and LDR
 
  On PIR#State do
    if [LDR#Light]<500
-     gpio,16,[PIR#State]
+     gpio,16,%eventvalue1%
    endif
  endon
 
 .. note::
 
   In other words: If the PIR switch is set (to either 1 or 0) and if
-  the light value < 500, then set GPIO port 16 of the ESP.
+  the light value < 500, then set GPIO pin 16 of the ESP.
 
 .. code-block:: none
 
  on PIR#State=1 do
    if [LDR#Light]<500
-     gpio,16,[PIR#State]
+     gpio,16,%eventvalue1%
    endif
  endon
 
@@ -1633,8 +1938,13 @@ Sub-second resolution and loop timers
 Added on 2020/08/12:
 
 * ``timerSet_ms``  To set the timer with msec resolution.
-* ``loopTimerSet`` To create a repeating timer with constant interval.
-* ``loopTimerSet_ms`` Same as ``loopTimerSet``, with msec interval.
+* ``loopTimerSet``  To create a repeating timer with constant interval (seconds).
+* ``loopTimerSet_ms``  Same as ``loopTimerSet``, with msec interval.
+
+Added on 2024/12/23:
+
+* ``loopTimerSetAndRun``  Same as ``loopTimerSet``, and immediately starts the 1st iteration.
+* ``loopTimerSetAndRun_ms``  Same as ``loopTimerSetAndRun``, with msec interval.
 
 Here a small example to show how to start/stop and pause loop timers.
 This can be used to create quite complex timing schemas, especially when
@@ -1741,13 +2051,13 @@ Provided that you also have the valve etc., the plants will be happy.
 SendTo and Publish
 ------------------
 
-With SendTo you can add a Rule to your ESP Easy, capable of sending an event to another unit.
+With SendTo you can add a Rule to your ESP Easy, capable of sending a command to another unit.
 This can be useful in cases where you want to take immediate action.
 There are two flavors:
 - SendTo to send remote unit control commands using the internal peer to peer UDP messaging
-- Publish to send remote commands to other ESP using MQTT broker
+- Publish to send remote commands to (other ESP using) MQTT broker
 
-SendTo:  SendTo <unit>,<command>
+SendTo:  ``SendTo <unit>,<command>``
 
 (Command must be quoted if it contains commas or spaces.)
 
@@ -1826,7 +2136,7 @@ to make things happen during certain hours of the day:
 
 This will set GPIO 16 to 1 when the PIR is triggered, if the time is
 before 7 in the morning or after 19:00 in the evening
-( useful if you don't have a light sensor).
+(useful if you don't have a light sensor).
 
 SendToHTTP
 ----------
@@ -1859,6 +2169,49 @@ Added: 2022/07/23
 * Host name can contain user credentials. For example: ``http://username:pass@hostname:portnr/foo.html``
 * HTTP user credentials now can handle Basic Auth and Digest Auth.
 
+Added: 2025/01/15
+
+* **HTTPResponseParser:** A Set of special parser for the response of a HTTP request.
+  
+  See :ref:`HTTPResponseParser`
+
+
+
+
+Convert curl POST command to PostToHTTP
+---------------------------------------
+
+Source: The Letscontrolit Forum.
+
+Like the ``SendToHTTP`` command, there are similar ``PostToHTTP`` and ``PutToHTTP`` commands, using the corresponding ``POST`` and ``PUT`` HTTP verbs to transmit data to a remote host.
+
+When translating a known ``curl`` command-line to ``PostToHTTP`` we have this example:
+
+Curl command sending data to Home assistant:
+
+.. code-block:: none
+
+  curl -X POST -H "Authorization: Bearer VERY_LONG_HOME_ASSISTANT_TOKEN_TO_VALORIZE" -H "Content-Type: application/json" -d '{"state": "off"}' http://192.168.1.25:8123/api/states/light.shellyplus1pm_123456abc123_switch_0
+
+Corresponding PostToHTTP command from rules using the 'Format 1' syntax: (formatting Switch State value to on/off in all lowercase)
+
+.. code-block:: none
+
+  PostToHTTP,192.168.1.25,8123,/api/states/light.shellyplus1pm_123456abc123_switch_0,'Authorization: Bearer VERY_LONG_HOME_ASSISTANT_TOKEN_TO_VALORIZE%LF%Content-Type: application/json',`{"state": "[Switch#State#O#l]"}`
+
+Corresponding PostToHTTP command from rules using the 'Format 2' syntax:
+
+.. code-block:: none
+
+  PostToHTTP,http://192.168.1.25:8123/api/states/light.shellyplus1pm_123456abc123_switch_0,'Authorization: Bearer VERY_LONG_HOME_ASSISTANT_TOKEN_TO_VALORIZE%LF%Content-Type: application/json',`{"state": "[Switch#State#O#l]"}`
+
+
+Remarks:
+
+- Multiple headers have to be combined into 1 (quoted) string argument, using ``%LF%`` as a separator.
+- Authorization can, instead of including a ``Authorization`` header, be included in the 'Format 2' syntax like ``http://username:password@url``, this will be transformed to the proper header value.
+- Similarly, a ``PUT`` request can be converted to ``PutToHTTP``.
+
 
 Dew Point for temp/humidity sensors (BME280 for example)
 --------------------------------------------------------
@@ -1887,11 +2240,11 @@ For dew point on the 'inside':
 .. code-block:: none
 
  on TempHumidityPressure_INSIDE#%RH do
-  TaskValueSet,7,2,[TempHumidityPressure_INSIDE#°C]-(100-[TempHumidityPressure_INSIDE#%RH])/5  // "7" is the number of the task that the dummy device is on, "2" is its second value where we dump our result
-  if [TempHumidityPressure_INSIDE#%RH]>49
+  TaskValueSet,7,2,[TempHumidityPressure_INSIDE#°C]-(100-%eventvalue1%)/5  // "7" is the number of the task that the dummy device is on, "2" is its second value where we dump our result
+  if %eventvalue1%>49
    Publish,%sysname%/DewPoint_INSIDE/°C,[Dew_point#°C2]
   else
-   Publish,%sysname%/DewPoint_INSIDE/°C,[Dew_point#°C2]*  //This asterix shows that the calculation is not correct due to the humidity being below 50%!
+   Publish,%sysname%/DewPoint_INSIDE/°C,[Dew_point#°C2]*  //This asterisk shows that the calculation is not correct due to the humidity being below 50%!
   endif
  endon
 
@@ -1900,18 +2253,17 @@ Report IP every 30 seconds using MQTT
 -------------------------------------
 
 This rule also work as a ping or heart beat of the unit. If it has not
-published a IP number for 30+ seconds the unit is experiencing problems.
+published an IP number for 30+ seconds the unit is probably experiencing problems.
 
 .. code-block:: none
 
  On System#Boot do    //When the ESP boots, do
   Publish,%sysname%/IP,%ip%
-  timerSet,1,30      //Set Timer 1 for the next event in 30 seconds
+  loopTimerSet,1,30   //Set Timer 1 for the next event in 30 seconds, repeating
  endon
 
  On Rules#Timer=1 do  //When Timer1 expires, do
   Publish,%sysname%/IP,%ip%
-  timerSet,1,30       //Resets the Timer 1 for another 30 seconds
  endon
 
 Custom reports to Domoticz with own IDX
@@ -1928,11 +2280,11 @@ just as an example we want to publish these as custom messages with a unique IDX
 .. code-block:: none
 
  on INA219#Amps do
-  Publish domoticz/in,{"idx":123456,"nvalue":0,"svalue":"[INA219#Amps]"} //Own made up IDX 123456
+  Publish domoticz/in,'{"idx":123456,"nvalue":0,"svalue":"%eventvalue1%"}' //Own made up IDX 123456
  endon
 
  on INA219#Watts do
-  Publish domoticz/in,{"idx":654321,"nvalue":0,"svalue":"[INA219#Watts]"} //Own made up IDX 654321
+  Publish domoticz/in,'{"idx":654321,"nvalue":0,"svalue":"%eventvalue1%"}' //Own made up IDX 654321
  endon
 
 
@@ -1960,7 +2312,7 @@ It is possible to use authentication in Domoticz and use it via SendToHTTP.
 * MkE= is the base64 encoded username ('2A' in this example)
 * OVM= is the base64 encoded password ('9S' in this example)
 
-``SendToHTTP xx.xx.xx.xx,8080,/json.htm?username=MkE=&password=OVM&type=command&param=switchlight&idx=36&switchcmd=On``
+``SendToHTTP xx.xx.xx.xx,8080,/json.htm?username=MkE=&password=OVM=&type=command&param=switchlight&idx=36&switchcmd=On``
 
 See also `Domoticz Wiki <https://www.domoticz.com/wiki/Domoticz_API/JSON_URL%27s#Authorization>`_
 
@@ -1997,11 +2349,11 @@ Using the pulse counter you can calculate and act on waterflow and changes like 
   TaskValueSet,3,2,0 // TaskValueSet TASKnr,VARnr,Value, Reset the PreviousLiters counter to 0
   TaskValueSet,3,3,0 // TaskValueSet TASKnr,VARnr,Value, Reset the Flow counter to 0
   TaskValueSet,3,4,0 // TaskValueSet TASKnr,VARnr,Value, Reset the PreviousFlow counter to 0
-  TimerSet,1,30 // Set Timer 1 for the next event in 30 seconds
+  LoopTimerSet,1,30 // Set Timer 1 repeating for an event every 30 seconds
  EndOn
 
  On Watermeter#Count do // When Pulse is detected
-  if [Watermeter#Count] > 0
+  if %eventvalue1% > 0
     SendToHTTP,192.168.1.50,8084,/json.htm?type=command&param=udevice&idx=337&nvalue=0&svalue=1
     TaskValueSet,3,3,60000/[Watermeter#Time]
     SendToHTTP,192.168.1.50,8084,/json.htm?type=command&param=udevice&idx=338&nvalue=0&svalue=[Liters#Flow]
@@ -2014,7 +2366,6 @@ Using the pulse counter you can calculate and act on waterflow and changes like 
     TaskValueSet,3,4,[Liters#Flow] // set flow to previous counter
     TaskValueSet,3,3,0
   endif
-    TimerSet,1,30 // Set Timer 1 for the next event in 30 seconds
  Endon
 
 
@@ -2076,7 +2427,7 @@ To speed up the search process, a b-tree search is much more efficient to find a
 
 The pre-requisites are:
 
-* A sorted list of accepted tag numbers
+* A *sorted* list of accepted tag numbers
 * Enough memory to store the list
 * Configure "Serial Log Level" to ``Error`` (Tools/Advanced page) (logging is quite time-consuming, the script will log minimally on Error level)
 
@@ -2148,14 +2499,14 @@ The next script should be placed at the top of ``Rules Set 1`` as they are calle
   Endon
   
   On Turnstile_out#Tag Do // Out-going reader
-    If [Turnstile_out#Tag]>0
-      Event,readet=[Turnstile_out#Tag]
+    If %eventvalue1%>0
+      Event,readet=%eventvalue1%
     Endif
   Endon
 
   On Turnstile_in#Tag Do // Incoming reader
-    If [Turnstile_in#Tag]>0
-      Event,readet=[Turnstile_in#Tag]
+    If %eventvalue1%>0
+      Event,readet=%eventvalue1%
     Endif
   Endon
 
@@ -2211,3 +2562,248 @@ It will read from file ``tags.txt`` and write to file ``loaddata.txt``:
     r.write('Endon\n')
 
 
+
+Moving average of many values
+-----------------------------
+
+To calculate the moving average of a value over many (several dozens up to 200) measurements, this script has been developed:
+
+.. code-block:: none
+
+  on MovingAverage do
+    // %v201% = max elements
+    // %v202% = last element
+    // %v203% = nr Elements
+    // %v204% = sum
+    // %v205% = average
+
+    if %v201%=0 // Not yet set?
+      let,201,200 // Set max number of elements, don't set > 200!!!
+    endif
+
+    if %v203% < %v201%
+      let,202,%v202%+1  // Update index of "last element"
+      let,203,%v203%+1  // Update nr Elements
+    else
+      if %v202% = %v201% // “The last will be first, and the first last” (Matthew 20:16)
+        let,202,1      // Index of "last element" should be modulo max elements
+        let,204,%v204%-[var#1]  // Subtract oldest element from the sum
+      else // new sequential write cycle
+        let,202,%v202%+1
+        let,204,%v204%-[var#%v202%]  // Subtract oldest element from the sum
+      endif
+    endif
+    let,%v202%,%eventvalue1%    // Store the new value in the array
+    let,204,%v204%+[var#%v202%] // Add new value to the sum
+    
+    let,205,%v204%/%v203% // Average
+    // Optionally, it can be stored in a Dummy Device plugin instead
+    TaskValueSet,Dummy,Average,%v204%/%v203% // Average
+  endon
+
+This rule can be used to calculate the moving average for, f.e., a temperature sensor like this:
+
+.. code-block:: none
+
+  on bme#temperature do
+    event,MovingAverage=%eventvalue1%   // Calculate the moving avg.
+    TaskRun,Dummy   // Send the value(s) to the configured Controller
+  endon
+
+This assumes that a Controller has been configured, and the Dummy task is configured to send out its values via the controller.
+
+Added: 2025-03-18
+
+The above example, adapted for using named variables (and %v1% .. %v200% for storing the values)
+
+.. code-block:: none
+
+  on MovingAverage do
+    // %v_max% = max elements
+    // %v_last% = last element
+    // %v_cnt% = nr Elements
+    // %v_sum% = sum
+    // %v_avg% = average
+    // %v_strt% = start-index for 'array'
+
+    if %v_max%=0 // Not yet set?
+      let,strt,1  // Start-index, can be changed if [var#1] .. [var#200] already in use
+      let,max,%v_strt%-1+200 // Set max number of elements (200).
+    endif
+
+    if %v_cnt% < %v_max%
+      inc,last  // Update index of "last element"
+      inc,cnt   // Update nr Elements
+    else
+      if %v_last% = %v_max% // “The last will be first, and the first last” (Matthew 20:16)
+        let,last,%v_strt%   // Index of "last element" should be modulo max elements
+      else // new sequential write cycle
+        inc,last
+      endif
+      dec,sum,[var#%v_last%]  // Subtract oldest element from the sum
+    endif
+    let,%v_last%,%eventvalue1%     // Store the new value in the array
+    inc,sum,[var#%v_last%] // Add new value to the sum
+    
+    let,avg,%v_sum%/%v_cnt% // Average
+    // Optionally, it can be stored in a Dummy Device plugin instead
+    TaskValueSet,Dummy,Average,%v_avg% // Average
+  endon
+
+
+2nd-order Butterworth low-pass filter
+-------------------------------------
+
+Suggested by thalesmaoa in `this GH Comment <https://github.com/letscontrolit/ESPEasy/issues/2304#issuecomment-2991103427>`_
+
+This is a simple but effective 2nd-order Butterworth low-pass filter (`Wiki page <https://en.wikipedia.org/wiki/Butterworth_filter>`_), more accurate than a moving average.
+
+It runs entirely in ESPEasy Rules, using internal variables (``Let``).
+
+Two cutoff frequencies are available:
+
+``fc = 0.2 Hz when v8 = 0``
+
+``fc = 0.1 Hz when v8 = 1``
+
+All parameters were calculated assuming a 1-second sampling interval (i.e., one event per second).
+
+If you can trigger events at a faster rate, new filter coefficients must be calculated.
+
+.. code-block:: none
+
+  On input1#ai1 Do
+    Let,8,1       // Set filter mode: 1 = 0.1 Hz, 0 = 0.2 Hz
+    Event,filt=%eventvalue1%
+  EndOn
+
+  On filt Do
+    // Shift input history
+    Let,4,[VAR#3]       // x2 ← x1
+    Let,3,[VAR#2]       // x1 ← x0
+    Let,2,%eventvalue1% // x0 ← new input
+
+    // Shift output history
+    Let,7,[VAR#6]       // y2 ← y1
+    Let,6,[VAR#5]       // y1 ← y0
+
+    // Compute filtered value, made available in %v5% / [var#5]
+    If %v8%=1
+      Let,5,0.067455*%v2%+0.134911*%v3%+0.067455*%v4%+1.14298*%v6%-0.412802*%v7%
+    Else
+      Let,5,0.2066*%v2%+0.4132*%v3%+0.2066*%v4%+0.3695*%v6%-0.1958*%v7%
+    EndIf
+  EndOn
+
+
+
+Register daily working time
+---------------------------
+
+To register the daily time in seconds that a device is active, these rules have been developed (from the forum).
+
+Required device tasks:
+
+* Sensor (temperature in the example)
+* Dummy device (named ``Dummy`` in this example, minimal 2 values, ``LoggingON`` and ``LoggingOFF``), Interval can be set to 0
+
+Changed: 2025-03-21 Use named variables, instead of numbered variables.
+
+.. code-block:: none
+
+  On System#Boot Do
+    TaskValueSet,Dummy,LoggingON,1 // Make sure timer is started and Heater ON message is sent
+  Endon
+
+  On DS1#Temperature Do // Check tmeperature
+    If %eventvalue1% < 40
+      GPIO,5,0
+      AsyncEvent,HeaterON=%eventvalue1%
+    Endif
+    If %eventvalue1% > 55
+      GPIO,5,1
+      AsyncEvent,HeaterOFF=%eventvalue1%
+    Endif
+  Endon
+
+  On HeaterON Do // Optional 1st argument is the temperature, defaults to the value of DS1#Temperature if not provided
+    If [Dummy#LoggingON] = 1
+      Let,secs,%syssec_d% // Store current nr of seconds of today in var#secs
+      PostToHTTP,192.168.1.20,8080,/receiver.php,'','%lcltime% !!! Temp = %eventvalue1|[DS1#Temperature]% -> Heater ON'
+      TaskValueSet,Dummy,LoggingON,0
+      TaskValueSetAndRun,Dummy,LoggingOFF,1
+    Endif
+  Endon
+
+  On HeaterOFF Do // Optional 1st argument is the temperature, defaults to the value of DS1#Temperature if not provided
+    If [Dummy#LoggingOFF] = 1
+      Inc,total,%syssec_d%-[int#secs] // Add run time to var#total
+      PostToHTTP,192.168.1.20,8080,/receiver.php,'','%lcltime% !!! Temp = %eventvalue1|[DS1#Temperature]% -> Heater OFF'
+      TaskValueSet,Dummy,LoggingON,1
+      TaskValueSetAndRun,Dummy,LoggingOFF,0
+    Endif
+  Endon
+
+  On Clock#Time=All,00:00 Do // At midnight
+    // Send value of [int#total] to wherever you need it
+    PostToHTTP,192.168.1.20,8080,/receiver.php,'','%lcltime% !!! Total RunningTime = [int#total] Seconds'
+    Let,secs,0 // Reset start time
+    Let,total,0 // Reset total counter 
+  Endon
+
+
+Register power used for a heater
+--------------------------------
+
+As a variation on the running time, we can also measure the time and calculate the total power used, as long as the used device-power is known. Parts from the above example have been re-used.
+
+This example uses a ``Generic - Dummy Device``, so the values can also be viewed on the Devices page. This has name: Power, output data type: Dual (or Triple or Quad, must be able to store decimals!), value names: Seconds (0 decimmals) and PowerUsed (4 decimals).
+
+The time is counted while GPIO-14 (D5 on a Wemos or NodeMCU ESP8266) has a low state, and power is calculated once the power goes off. The not-On state will need a pull-up resistor to pull the level to 3V3!
+
+After loading this code, either reboot the ESP, or run the command ``event,system#boot`` to set up the GPIO monitoring and wattage of the device.
+
+.. code-block:: none
+
+  // Used variables: 1,3,4,5
+
+  On GPIO#14 Do // GPIO-14 = D5 on Wemos/NodeMCU ESP8266 boards
+    If %eventvalue1%=0 // On state
+      Let,1,%syssec_d% // Store current nr of seconds of today in var#1
+    Else // Off state
+      Event,CalcPower // Don't queue
+      Event,TransmitPower // Send out to receiver
+    Endif
+    Let,5,!%eventvalue1% // 0 = On, to invert on/off state change to: Let,5,%eventvalue1%
+    LogEntry,"Power [int#5#O#C], measured: [Power#Seconds] sec. [Power#PowerUsed#d.4] kWh"
+  Endon
+
+  On CalcPower Do
+    TaskValueSet,Power,Seconds,[Power#Seconds]+%syssec_d%-[int#1] // Add run time to Power#Seconds
+    Let,4,[Power#Seconds]*[var#3] // Wattseconds
+    If [var#4]>0
+      TaskValueSet,Power,PowerUsed,[var#4]/3600000 // Wattseconds to kWh
+    Endif
+    TaskRun,Power
+  Endon
+
+  On TransmitPower Do
+    // Send value of [Power#Seconds] and [Power#PowerUsed] to wherever you need it, adjust as needed
+    PostToHTTP,192.168.1.20,8080,/receiver.php,'','%lcltime% !!! Total RunningTime = [Power#Seconds] Seconds, PowerUsed = [Power#PowerUsed] kWh'
+  Endon
+
+  On Clock#Time=All,00:00 Do // At midnight
+    // Include power used until midnight
+    If [Plugin#GPIO#PinState#14]=0 // Still on?
+      Event,CalcPower // Don't queue
+    Endif
+    Let,1,0 // Reset start time
+    Event,TransmitPower // Send out remainder of the day
+    TaskValueSet,Power,Seconds,0 // Reset total counter
+    TaskValueSet,Power,PowerUsed,0 // Reset total power
+  Endon
+
+  On System#Boot Do
+    Monitor,gpio,14 // Generate an event when the GPIO state changes
+    Let,3,250 // Wattage of the load, adjust as needed
+  Endon

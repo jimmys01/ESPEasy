@@ -2,8 +2,33 @@
 #ifdef USES_P093
 
 // #######################################################################################################
-// ################################ Plugin 090: Mitsubishi Heat Pump #####################################
+// ################################ Plugin 093: Mitsubishi Heat Pump #####################################
 // #######################################################################################################
+
+/** Changelog:
+ * 2025-06-14 tonhuisman: Add support for Custom Value Type per task value
+ * 2025-01-12 tonhuisman: Add support for MQTT AutoDiscovery (not supported yet for Heatpump)
+ * 2023-09-21 jfmennedy: Add support for "SetRemoteTemperature" Issue#4711
+ * 2023-05-04 tonhuisman: Add support for PLUGIN_GET_CONFIG_VALUE to enable fetching all available values (as included in the json)
+ * 2023-05-04 tonhuisman: Start Changelog
+ */
+
+/** Get Config values:
+ * Usage: [<taskname>#<configName>]
+ * Supported configNames are: (not case-sensitive)
+ * - roomTemperature
+ * - remoteTemperature
+ * - wideVane
+ * - power
+ * - mode
+ * - fan
+ * - vane
+ * - iSee
+ * - temperature
+ * With 'Include AC status' checkbox enabled:
+ * - operating
+ * - compressorFrequency
+ */
 
 # include "src/PluginStructs/P093_data_struct.h"
 
@@ -21,13 +46,16 @@ boolean Plugin_093(uint8_t function, struct EventStruct *event, String& string) 
 
   switch (function) {
     case PLUGIN_DEVICE_ADD: {
-      Device[++deviceCount].Number       = PLUGIN_ID_093;
-      Device[deviceCount].Type           = DEVICE_TYPE_SERIAL;
-      Device[deviceCount].VType          = Sensor_VType::SENSOR_TYPE_STRING;
-      Device[deviceCount].ValueCount     = 1;
-      Device[deviceCount].SendDataOption = true;
-      Device[deviceCount].TimerOption    = true;
-      Device[deviceCount].TimerOptional  = true;
+      auto& dev = Device[++deviceCount];
+      dev.Number         = PLUGIN_ID_093;
+      dev.Type           = DEVICE_TYPE_SERIAL;
+      dev.VType          = Sensor_VType::SENSOR_TYPE_STRING;
+      dev.ValueCount     = 1;
+      dev.SendDataOption = true;
+      dev.TimerOption    = true;
+      dev.TimerOptional  = true;
+      dev.CustomVTypeVar = true;
+      dev.MqttStateClass = true;
       break;
     }
 
@@ -45,6 +73,22 @@ boolean Plugin_093(uint8_t function, struct EventStruct *event, String& string) 
       serialHelper_getGpioNames(event);
       break;
     }
+
+    # if FEATURE_MQTT_DISCOVER || FEATURE_CUSTOM_TASKVAR_VTYPE
+    case PLUGIN_GET_DISCOVERY_VTYPES:
+    {
+      #  if FEATURE_CUSTOM_TASKVAR_VTYPE
+
+      for (uint8_t i = 0; i < event->Par5; ++i) {
+        event->ParN[i] = ExtraTaskSettings.getTaskVarCustomVType(i);  // Custom/User selection
+      }
+      #  else // if FEATURE_CUSTOM_TASKVAR_VTYPE
+      event->Par1 = static_cast<int>(Sensor_VType::SENSOR_TYPE_NONE); // Not yet supported
+      #  endif // if FEATURE_CUSTOM_TASKVAR_VTYPE
+      success = true;
+      break;
+    }
+    # endif // if FEATURE_MQTT_DISCOVER || FEATURE_CUSTOM_TASKVAR_VTYPE
 
     case PLUGIN_WEBFORM_SHOW_CONFIG: {
       string += serialHelper_getSerialTypeLabel(event);
@@ -92,7 +136,7 @@ boolean Plugin_093(uint8_t function, struct EventStruct *event, String& string) 
     }
 
     case PLUGIN_WRITE: {
-      if (parseString(string, 1).equalsIgnoreCase(F("MitsubishiHP"))) {
+      if (equals(parseString(string, 1), F("mitsubishihp"))) {
         P093_data_struct *heatPump = static_cast<P093_data_struct *>(getPluginTaskData(event->TaskIndex));
 
         if (heatPump != nullptr) {
@@ -108,6 +152,16 @@ boolean Plugin_093(uint8_t function, struct EventStruct *event, String& string) 
 
       if ((heatPump != nullptr) && heatPump->sync()) {
         Scheduler.schedule_task_device_timer(event->TaskIndex, millis() + 10);
+      }
+      break;
+    }
+
+    case PLUGIN_GET_CONFIG_VALUE:
+    {
+      P093_data_struct *heatPump = static_cast<P093_data_struct *>(getPluginTaskData(event->TaskIndex));
+
+      if (heatPump != nullptr) {
+        success = heatPump->plugin_get_config_value(event, string);
       }
       break;
     }

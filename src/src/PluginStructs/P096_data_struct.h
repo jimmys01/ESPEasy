@@ -27,10 +27,11 @@
 # define P096_CONFIG_ROTATION           PCONFIG(1)      // Rotation
 # define P096_CONFIG_WIDTH              PCONFIG(2)      // Display width
 # define P096_CONFIG_HEIGHT             PCONFIG(3)      // Display height
+# define P096_CONFIG_DEFAULT_FONT       PCONFIG(4)      // Default font
 
-# define P096_CONFIG_COLORS             PCONFIG_LONG(3) // 2 Colors fit in 1 long
+# define P096_CONFIG_COLORS            PCONFIG_ULONG(3) // 2 Colors fit in 1 long
 
-# define P096_CONFIG_FLAGS              PCONFIG_LONG(0) // All flags, 32 bits available
+# define P096_CONFIG_FLAGS             PCONFIG_ULONG(0) // All flags, 32 bits available
 // # define P096_CONFIG_FLAG_NO_WAKE       0               // Flag: Don't wake display
 // # define P096_CONFIG_FLAG_INVERT_BUTTON 1               // Flag: Inverted button state
 // # define P096_CONFIG_FLAG_CLEAR_ON_EXIT 2               // Flag: Clear display on exit
@@ -113,7 +114,7 @@ public:
                    uint16_t            bgcolor      = ADAGFX_BLACK,
                    AdaGFXColorDepth    colorDepth   = AdaGFXColorDepth::Monochrome,
                    bool                textBackFill = true);
-  P096_data_struct() = delete;
+  P096_data_struct()                                = delete;
   virtual ~P096_data_struct();
 
   bool plugin_init(struct EventStruct *event);
@@ -154,6 +155,10 @@ private:
 
   int8_t _leftMarginCompensation = 0; // Not settable yet
   int8_t _topMarginCompensation  = 0;
+
+  String strings[P096_Nlines];
+  bool   stringsLoaded     = false;
+  bool   stringsHasContent = false;
 };
 
 

@@ -4,12 +4,14 @@
 #include "../../_Plugin_Helper.h"
 #ifdef USES_P141
 
-# include <Adafruit_GFX.h>                  // include Adafruit graphics library
-# include <Adafruit_PCD8544.h>              // include Adafruit PCD8544 LCD library
+# include <Adafruit_GFX.h>     // include Adafruit graphics library
+# include <Adafruit_PCD8544.h> // include Adafruit PCD8544 LCD library
 
 # include "../Helpers/AdafruitGFX_helper.h" // Use Adafruit graphics helper object
 
-# define P141_FEATURE_CURSOR_XY_VALUES  1   // Enable availability of CursorX and CursorY values
+# ifndef P141_FEATURE_CURSOR_XY_VALUES
+#  define P141_FEATURE_CURSOR_XY_VALUES  1  // Enable availability of CursorX and CursorY values
+# endif // ifndef P141_FEATURE_CURSOR_XY_VALUES
 
 # ifdef LIMIT_BUILD_SIZE
 #  if P141_FEATURE_CURSOR_XY_VALUES
@@ -30,6 +32,7 @@
 # define P141_CONFIG_CONTRAST           PCONFIG(2)       // Contrast
 # define P141_CONFIG_BACKLIGHT_PIN      PCONFIG(3)       // Backlight pin
 # define P141_CONFIG_BACKLIGHT_PERCENT  PCONFIG(4)       // Backlight percentage
+# define P141_CONFIG_DEFAULT_FONT       PCONFIG(5)       // Default font
 
 # define P141_CONFIG_FLAGS              PCONFIG_ULONG(0) // All flags
 # define P141_CONFIG_FLAG_NO_WAKE       0                // Flag: Don't wake display
@@ -87,7 +90,12 @@ public:
                    uint16_t            fgcolor         = ADAGFX_WHITE,
                    uint16_t            bgcolor         = ADAGFX_BLACK,
                    bool                textBackFill    = true,
-                   bool                displayInverted = false);
+                   bool                displayInverted = false
+                   # if                ADAGFX_FONTS_INCLUDED
+                   ,
+                   const uint8_t defaultFontId = 0
+                   # endif // if ADAGFX_FONTS_INCLUDED
+                   );
   P141_data_struct() = delete;
   virtual ~P141_data_struct();
 
@@ -122,10 +130,10 @@ private:
   Adafruit_PCD8544   *pcd8544   = nullptr;
   AdafruitGFX_helper *gfxHelper = nullptr;
 
-  uint16_t _xpix = 84; // Fixed size
-  uint16_t _ypix = 48;
-  uint16_t _textcols = 0;
-  uint16_t _textrows = 0;
+  uint16_t _xpix         = 84; // Fixed size
+  uint16_t _ypix         = 48;
+  uint16_t _textcols     = 0;
+  uint16_t _textrows     = 0;
   uint8_t  _fontwidth    = 6; // Default font characteristics
   uint8_t  _fontheight   = 10;
   uint8_t  _heightOffset = 0;
@@ -143,6 +151,9 @@ private:
   uint16_t            _bgcolor;
   bool                _textBackFill;
   bool                _displayInverted;
+  # if ADAGFX_FONTS_INCLUDED
+  uint8_t _defaultFontId;
+  # endif // if ADAGFX_FONTS_INCLUDED
 
   String _commandTriggerCmd;
 
@@ -153,6 +164,10 @@ private:
 
   int8_t _leftMarginCompensation = 0; // Not settable yet
   int8_t _topMarginCompensation  = 0;
+
+  String strings[P141_Nlines];
+  bool   stringsLoaded     = false;
+  bool   stringsHasContent = false;
 };
 
 
